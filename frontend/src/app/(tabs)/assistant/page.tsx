@@ -85,6 +85,16 @@ function parseStructuredCards(data: ChatApiResponse): Partial<StructuredCards> {
   };
 }
 
+function hasStructuredCards(structured: Partial<StructuredCards> | undefined): boolean {
+  if (!structured) {
+    return false;
+  }
+
+  return Object.values(structured).some(
+    (section) => isSectionData(section) && hasRenderableFields(section),
+  );
+}
+
 function hasRenderableFields(section: SectionData): boolean {
   return Object.entries(section).some(([, value]) => value !== null && value !== undefined && value !== "");
 }
@@ -186,7 +196,7 @@ export default function AssistantPage() {
         {
           role: "assistant",
           content: assistantResponse,
-          structured,
+          structured: hasStructuredCards(structured) ? structured : undefined,
         },
       ]);
 
@@ -263,7 +273,7 @@ export default function AssistantPage() {
                   key={`${message.role}-${index}`}
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {message.role === "assistant" && message.structured ? (
+                  {message.role === "assistant" && hasStructuredCards(message.structured) ? (
                     <div className="w-full max-w-[95%] space-y-3 rounded-[1.75rem] border border-lime-100 bg-white p-4 shadow-sm sm:p-5">
                       <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <Sparkles className="h-4 w-4 text-lime-700" />

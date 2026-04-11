@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, BadgeIndianRupee, CheckCircle2, Loader2, Sprout } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
-import { useUser } from "@/context/UserContext";
+import { useUser, type UserProfile } from "@/context/UserContext";
 
 type GovernmentScheme = {
   name: string;
@@ -31,23 +31,62 @@ type FinancialAdviceResponse = {
   };
 };
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  ""
-).replace(/\/$/, "");
+type FinancialFormState = {
+  landOwned: boolean;
+  cropType: string;
+  location: string;
+  incomeLevel: string;
+  landArea?: number;
+};
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+
+function deriveIncomeLevel(landArea: number): string {
+  if (landArea <= 2) {
+    return "low";
+  }
+
+  if (landArea <= 5) {
+    return "medium";
+  }
+
+  return "high";
+}
+
+function buildFormState(profile: UserProfile | null, placeName: string): FinancialFormState {
+  if (!profile) {
+    return {
+      landOwned: false,
+      cropType: "",
+      location: placeName,
+      incomeLevel: "medium",
+      landArea: undefined,
+    };
+  }
+
+  return {
+    landOwned: profile.land_area > 0,
+    cropType: profile.primary_crop || "",
+    location: profile.location_name || placeName,
+    incomeLevel: deriveIncomeLevel(profile.land_area),
+    landArea: profile.land_area,
+  };
+}
 
 export default function FinancePage() {
   const { placeName } = useLocation();
-    const router = useRouter();
-    const { user, profile } = useUser();
-  
-    // Protect route
-    useEffect(() => {
-      if (!user || !profile) {
-        router.push(user ? '/onboarding' : '/login');
-      }
-    }, [user, profile, router]);
+  const router = useRouter();
+  const { user, profile, loading: userLoading } = useUser();
+
+  useEffect(() => {
+    if (userLoading) {
+      return;
+    }
+
+    if (!user || !profile) {
+      router.push(user ? "/onboarding" : "/login");
+    }
+  }, [user, profile, userLoading, router]);
 
   const [landOwned, setLandOwned] = useState(true);
   const [cropType, setCropType] = useState("");
@@ -56,14 +95,10 @@ export default function FinancePage() {
   const [advice, setAdvice] = useState<FinancialAdviceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasAutoFetched, setHasAutoFetched] = useState(false);
 
-  const fetchAdvice = async (profileOverride?: {
-    landOwned: boolean;
-    cropType: string;
-    location: string;
-    incomeLevel: string;
-  }) => {
-    const profile = profileOverride ?? {
+  const fetchAdvice = async (profileOverride?: FinancialFormState) => {
+    const payloadProfile = profileOverride ?? {
       landOwned,
       cropType,
       location: placeName,
@@ -82,7 +117,8 @@ export default function FinancePage() {
         },
         cache: "no-store",
         body: JSON.stringify({
-          ...profile,
+          ...payloadProfile,
+          landArea: profileOverride?.landArea,
           language,
         }),
       });
@@ -101,15 +137,21 @@ export default function FinancePage() {
   };
 
   useEffect(() => {
-    void fetchAdvice({
-      landOwned,
-      cropType,
-      location: placeName,
-      incomeLevel,
-    });
-    // Load once when the dashboard opens; the form button refreshes after edits.
+    if (!profile) {
+      return;
+    }
+
+    const formState = buildFormState(profile, placeName);
+    setLandOwned(formState.landOwned);
+    setCropType(formState.cropType);
+    setIncomeLevel(formState.incomeLevel);
+
+    if (!hasAutoFetched) {
+      setHasAutoFetched(true);
+      void fetchAdvice(formState);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [profile, placeName]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
