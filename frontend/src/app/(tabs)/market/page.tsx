@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -13,6 +14,7 @@ import {
   Wheat,
 } from "lucide-react";
 import { useLocation } from "../../../context/LocationContext";
+import { useUser } from "@/context/UserContext";
 
 type MarketRecord = {
   market: string;
@@ -83,6 +85,16 @@ function buildBars(chart: MarketIntelligenceResponse["chart"]) {
 
 export default function MarketPage() {
   const { latitude, longitude, placeName } = useLocation();
+    const router = useRouter();
+    const { user, profile } = useUser();
+  
+    // Protect route
+    useEffect(() => {
+      if (!user || !profile) {
+        router.push(user ? '/onboarding' : '/login');
+      }
+    }, [user, profile, router]);
+
   const [commodity, setCommodity] = useState("Tomato");
   const [marketData, setMarketData] = useState<MarketIntelligenceResponse | null>(null);
   const [loading, setLoading] = useState(false);

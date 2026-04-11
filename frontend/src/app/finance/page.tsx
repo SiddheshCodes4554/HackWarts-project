@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, BadgeIndianRupee, CheckCircle2, Loader2, Sprout } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
+import { useUser } from "@/context/UserContext";
 
 type GovernmentScheme = {
   name: string;
@@ -33,6 +35,16 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5
 
 export default function FinancePage() {
   const { placeName } = useLocation();
+    const router = useRouter();
+    const { user, profile } = useUser();
+  
+    // Protect route
+    useEffect(() => {
+      if (!user || !profile) {
+        router.push(user ? '/onboarding' : '/login');
+      }
+    }, [user, profile, router]);
+
   const [landOwned, setLandOwned] = useState(true);
   const [cropType, setCropType] = useState("");
   const [incomeLevel, setIncomeLevel] = useState("medium");

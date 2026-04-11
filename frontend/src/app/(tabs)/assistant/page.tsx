@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   BarChart3,
@@ -97,6 +98,15 @@ export default function AssistantPage() {
   const { latitude, longitude, placeName } = useLocation();
   const { user, profile } = useUser();
   const { history, addToHistory, clear } = useChatHistory();
+    const router = useRouter();
+  
+    // Protect route - must be authenticated and have completed onboarding
+    useEffect(() => {
+      if (!user || !profile) {
+        router.push(user ? '/onboarding' : '/login');
+      }
+    }, [user, profile, router]);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [intent, setIntent] = useState("");

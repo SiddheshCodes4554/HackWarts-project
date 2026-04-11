@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
     ArrowLeft,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { LocationModal } from "../../components/LocationModal";
 import { useLocation } from "../../context/LocationContext";
+import { useUser } from "@/context/UserContext";
 
 type WeatherResponse = {
     temperature: number;
@@ -23,6 +25,16 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5
 
 export default function WeatherPage() {
     const { latitude, longitude, placeName, isDetecting } = useLocation();
+        const router = useRouter();
+        const { user, profile } = useUser();
+    
+        // Protect route
+        useEffect(() => {
+            if (!user || !profile) {
+                router.push(user ? '/onboarding' : '/login');
+            }
+        }, [user, profile, router]);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [weather, setWeather] = useState<WeatherResponse | null>(null);

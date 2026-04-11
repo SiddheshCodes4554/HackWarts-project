@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -57,6 +58,17 @@ export default function HomePage() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState("");
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+    // Import router for redirects
+    const router = useRouter();
+    const { user, loading: userLoading } = useUser();
+  
+    // Protect route - must be authenticated and have completed onboarding
+    useEffect(() => {
+      if (!userLoading && (!user || !profile)) {
+        router.push(user ? '/onboarding' : '/login');
+      }
+    }, [user, profile, userLoading, router]);
 
   // Use user's stored location if available
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;

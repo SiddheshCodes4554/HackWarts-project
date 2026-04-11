@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
+import { useUser } from "@/context/UserContext";
 
 type CropAdvisoryResponse = {
   disease?: string;
@@ -102,6 +104,16 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 export default function CropAdvisoryPage() {
   const { latitude, longitude, placeName } = useLocation();
+    const router = useRouter();
+    const { user, profile } = useUser();
+  
+    // Protect route
+    useEffect(() => {
+      if (!user || !profile) {
+        router.push(user ? '/onboarding' : '/login');
+      }
+    }, [user, profile, router]);
+
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
