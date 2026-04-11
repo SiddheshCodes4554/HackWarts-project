@@ -1,21 +1,85 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Mic, SendHorizonal, Sparkles } from "lucide-react";
+import {
+  BarChart3,
+  CloudRain,
+  DollarSign,
+  Leaf,
+  Mic,
+  SendHorizonal,
+  Sparkles,
+} from "lucide-react";
+
+type SectionData = Record<string, unknown>;
+
+type StructuredCards = {
+  weather: SectionData;
+  crops: SectionData;
+  market: SectionData;
+  finance: SectionData;
+};
 
 type Message = {
   role: "user" | "assistant";
   content: string;
+  structured?: StructuredCards;
 };
 
 type ChatApiResponse = {
   reply?: string;
   intent?: string;
   error?: string;
+  weather?: SectionData;
+  crops?: SectionData;
+  market?: SectionData;
+  finance?: SectionData;
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 const CHAT_TIMEOUT_MS = 15000;
+
+function toDisplayText(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+}
+
+function parseStructuredCards(data: ChatApiResponse): StructuredCards | undefined {
+  const hasStructuredFields =
+    data.weather && data.crops && data.market && data.finance;
+
+  if (hasStructuredFields) {
+    return {
+      weather: data.weather as SectionData,
+      crops: data.crops as SectionData,
+      market: data.market as SectionData,
+      finance: data.finance as SectionData,
+    };
+  }
+
+  if (!data.reply) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(data.reply) as Partial<StructuredCards>;
+    if (parsed.weather && parsed.crops && parsed.market && parsed.finance) {
+      return {
+        weather: parsed.weather as SectionData,
+        crops: parsed.crops as SectionData,
+        market: parsed.market as SectionData,
+        finance: parsed.finance as SectionData,
+      };
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
 
 export default function AssistantPage() {
   const [input, setInput] = useState("");
@@ -73,6 +137,7 @@ export default function AssistantPage() {
       }
 
       setIntent(data.intent ?? "general_support");
+      const structured = parseStructuredCards(data);
 
       setMessages((current) => [
         ...current,
@@ -80,6 +145,7 @@ export default function AssistantPage() {
           role: "assistant",
           content:
             data.reply ?? "I couldn't generate a live response just now. Please try again.",
+          structured,
         },
       ]);
     } catch (error) {
@@ -131,14 +197,81 @@ export default function AssistantPage() {
                 key={`${message.role}-${index}`}
                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div
-                  className={`max-w-[85%] rounded-[2rem] px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user"
-                      ? "bg-lime-700 text-white"
-                      : "border border-lime-100 bg-white text-slate-800"
+                {message.role === "assistant" && message.structured ? (
+                  <div className="w-full max-w-[95%] space-y-3 rounded-[1.75rem] border border-lime-100 bg-white p-4 shadow-sm sm:p-5">
+                    <p className="text-sm leading-6 text-slate-700">Structured advisory report</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        {
+                          label: "Weather Card",
+                          key: "weather",
+                          icon: CloudRain,
+                          accent: "text-sky-700 bg-sky-50 border-sky-100",
+                        },
+                        {
+                          label: "Crop Card",
+                          key: "crops",
+                          icon: Leaf,
+                          accent: "text-lime-700 bg-lime-50 border-lime-100",
+                        },
+                        {
+                          label: "Market Card",
+                          key: "market",
+                          icon: BarChart3,
+                          accent: "text-violet-700 bg-violet-50 border-violet-100",
+                        },
+                        {
+                          label: "Finance Card",
+                          key: "finance",
+                          icon: DollarSign,
+                          accent: "text-amber-700 bg-amber-50 border-amber-100",
+                        },
+                      ].map((card) => {
+                        const Icon = card.icon;
+                        const payload = message.structured?.[card.key as keyof StructuredCards] as SectionData;
+                        const entries = Object.entries(payload ?? {});
+
+                        return (
+                          <article
+                            key={card.key}
+                            className={`rounded-2xl border p-4 shadow-sm ${card.accent}`}
+                          >
+                            <div className="flex items-center gap-2 text-sm font-semibold">
+                              <Icon className="h-4 w-4" />
+                              {card.label}
+                            </div>
+                            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-700">
+                              {entries.length > 0 ? (
+                                entries.slice(0, 4).map(([entryKey, value]) => (
+                                  <div key={entryKey} className="rounded-xl bg-white/80 px-3 py-2">
+                                    <p className="font-semibold uppercase tracking-[0.1em] text-slate-500">
+                                      {entryKey}
+                                    </p>
+                                    <p className="mt-1 text-sm text-slate-800">{toDisplayText(value)}</p>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
+                                  No details available.
+                                </p>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[85%] rounded-[2rem] px-4 py-3 text-sm leading-6 shadow-sm ${
+                      message.role === "user"
+                        ? "bg-lime-700 text-white"
+                        : "border border-lime-100 bg-white text-slate-800"
                     }`}
-                >
-                  {message.content}
-                </div>
+                  >
+                    {message.content}
+                  </div>
+                )}
               </div>
             ))}
 
