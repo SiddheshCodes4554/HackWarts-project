@@ -24,13 +24,14 @@ type StructuredCards = {
 type Message = {
   role: "user" | "assistant";
   content: string;
-  structured?: StructuredCards;
+  structured?: Partial<StructuredCards>;
 };
 
 type ChatApiResponse = {
   reply?: string;
   intent?: string;
   error?: string;
+  final_message?: string;
   weather?: SectionData;
   crops?: SectionData;
   market?: SectionData;
@@ -45,41 +46,46 @@ function toDisplayText(value: unknown): string {
     return String(value);
   }
 
-  return JSON.stringify(value);
+  if (value instanceof Date) {
+    return value.toLocaleString();
+  }
+
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  return String(value);
 }
 
-function parseStructuredCards(data: ChatApiResponse): StructuredCards | undefined {
-  const hasStructuredFields =
-    data.weather && data.crops && data.market && data.finance;
+function toReadableLabel(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
 
-  if (hasStructuredFields) {
-    return {
-      weather: data.weather as SectionData,
-      crops: data.crops as SectionData,
-      market: data.market as SectionData,
-      finance: data.finance as SectionData,
-    };
-  }
+function isSectionData(value: unknown): value is SectionData {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
-  if (!data.reply) {
-    return undefined;
-  }
+function parseStructuredCards(data: ChatApiResponse): Partial<StructuredCards> {
+  return {
+    ...(isSectionData(data.weather) ? { weather: data.weather } : {}),
+    ...(isSectionData(data.crops) ? { crops: data.crops } : {}),
+    ...(isSectionData(data.market) ? { market: data.market } : {}),
+    ...(isSectionData(data.finance) ? { finance: data.finance } : {}),
+  };
+}
 
-  try {
-    const parsed = JSON.parse(data.reply) as Partial<StructuredCards>;
-    if (parsed.weather && parsed.crops && parsed.market && parsed.finance) {
-      return {
-        weather: parsed.weather as SectionData,
-        crops: parsed.crops as SectionData,
-        market: parsed.market as SectionData,
-        finance: parsed.finance as SectionData,
-      };
-    }
-  } catch {
-    return undefined;
-  }
+function hasRenderableFields(section: SectionData): boolean {
+  return Object.entries(section).some(([, value]) => value !== null && value !== undefined && value !== "");
+}
 
-  return undefined;
+function renderSectionRows(section: SectionData): Array<[string, string]> {
+  return Object.entries(section)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .slice(0, 5)
+    .map(([key, value]) => [toReadableLabel(key), toDisplayText(value)]);
 }
 
 export default function AssistantPage() {
@@ -208,66 +214,75 @@ export default function AssistantPage() {
               >
                 {message.role === "assistant" && message.structured ? (
                   <div className="w-full max-w-[95%] space-y-3 rounded-[1.75rem] border border-lime-100 bg-white p-4 shadow-sm sm:p-5">
-                    <p className="text-sm leading-6 text-slate-700">Structured advisory report</p>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <Sparkles className="h-4 w-4 text-lime-700" />
+                      Structured advisory
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {[
                         {
-                          label: "Weather Card",
+                          label: "Weather",
                           key: "weather",
                           icon: CloudRain,
-                          accent: "text-sky-700 bg-sky-50 border-sky-100",
+                          accent: "border-sky-100 bg-sky-50 text-sky-800",
                         },
                         {
-                          label: "Crop Card",
+                          label: "Crops",
                           key: "crops",
                           icon: Leaf,
-                          accent: "text-lime-700 bg-lime-50 border-lime-100",
+                          accent: "border-lime-100 bg-lime-50 text-lime-800",
                         },
                         {
-                          label: "Market Card",
+                          label: "Market",
                           key: "market",
                           icon: BarChart3,
-                          accent: "text-violet-700 bg-violet-50 border-violet-100",
+                          accent: "border-violet-100 bg-violet-50 text-violet-800",
                         },
                         {
-                          label: "Finance Card",
+                          label: "Finance",
                           key: "finance",
                           icon: DollarSign,
-                          accent: "text-amber-700 bg-amber-50 border-amber-100",
+                          accent: "border-amber-100 bg-amber-50 text-amber-800",
                         },
                       ].map((card) => {
                         const Icon = card.icon;
-                        const payload = message.structured?.[card.key as keyof StructuredCards] as SectionData;
-                        const entries = Object.entries(payload ?? {});
+                        const payload = message.structured?.[card.key as keyof StructuredCards];
+
+                        if (!payload || !hasRenderableFields(payload)) {
+                          return null;
+                        }
 
                         return (
                           <article
                             key={card.key}
-                            className={`rounded-2xl border p-4 shadow-sm ${card.accent}`}
+                            className={`rounded-[1.5rem] border p-4 shadow-sm ${card.accent}`}
                           >
-                            <div className="flex items-center gap-2 text-sm font-semibold">
-                              <Icon className="h-4 w-4" />
-                              {card.label}
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+                                <Icon className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">{card.label}</p>
+                                <p className="text-xs text-slate-500">Live advisory summary</p>
+                              </div>
                             </div>
-                            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-700">
-                              {entries.length > 0 ? (
-                                entries.slice(0, 4).map(([entryKey, value]) => (
-                                  <div key={entryKey} className="rounded-xl bg-white/80 px-3 py-2">
-                                    <p className="font-semibold uppercase tracking-[0.1em] text-slate-500">
-                                      {entryKey}
-                                    </p>
-                                    <p className="mt-1 text-sm text-slate-800">{toDisplayText(value)}</p>
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
-                                  No details available.
-                                </p>
-                              )}
+
+                            <div className="mt-4 space-y-2">
+                              {renderSectionRows(payload).map(([entryLabel, value]) => (
+                                <div
+                                  key={entryLabel}
+                                  className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2"
+                                >
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                    {entryLabel}
+                                  </p>
+                                  <p className="mt-1 text-sm leading-6 text-slate-800">{value}</p>
+                                </div>
+                              ))}
                             </div>
                           </article>
                         );
-                      })}
+                      }).filter(Boolean)}
                     </div>
                   </div>
                 ) : (
