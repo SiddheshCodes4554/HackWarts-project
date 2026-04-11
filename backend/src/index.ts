@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
+import { analyzeCropRouter } from "./routes/analyzeCrop";
 import { chatRouter } from "./routes/chat";
 import { weatherRouter } from "./routes/weather";
 
@@ -20,6 +21,7 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use(chatRouter);
+app.use(analyzeCropRouter);
 app.use(weatherRouter);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

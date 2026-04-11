@@ -57,9 +57,16 @@ export type CropAdviceInput = {
   soil: SoilProfile;
   crop?: string;
   disease?: string;
+  diseaseConfidence?: number;
   language?: string;
   query?: string;
   growthStage?: string;
+};
+
+export type CropImageAnalysis = {
+  symptoms: string;
+  disease_name: string;
+  confidence: number;
 };
 
 export type CropContextSnapshot = {
@@ -85,6 +92,20 @@ export type CropAdviceResult = {
   };
   warnings: string[];
   summary: string;
+};
+
+export type CropAdvisoryResponse = {
+  disease: string;
+  confidence: number;
+  symptoms: string;
+  treatment: string[];
+  prevention: string[];
+  source: "image" | "text";
+  context?: {
+    season?: string;
+    soil_type?: string;
+    weather_summary?: string;
+  };
 };
 
 export type AgentResult = {

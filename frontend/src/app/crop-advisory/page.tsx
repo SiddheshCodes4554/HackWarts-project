@@ -1,48 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
-  CloudRain,
+  Camera,
   ClipboardList,
+  Image as ImageIcon,
   Loader2,
   MapPin,
-  ShieldAlert,
   Sparkles,
-  Sprout,
+  Trash2,
+  Upload,
 } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
 
-type SectionValue = Record<string, unknown>;
-
-type CropAdvisoryData = {
+type CropAdvisoryResponse = {
   disease?: string;
   confidence?: number;
-  root_cause?: string;
-  treatment?: unknown;
-  prevention?: unknown;
-  crop_recommendation?: unknown;
+  symptoms?: string;
+  treatment?: string[];
+  prevention?: string[];
+  source?: "image" | "text";
   context?: {
     season?: string;
     soil_type?: string;
     weather_summary?: string;
   };
-  warnings?: unknown;
-  summary?: string;
+  error?: string;
 };
 
-type CropChatResponse = {
-  reply?: string;
-  final_message?: string;
-  error?: string;
-  crops?: CropAdvisoryData;
+type SelectedImage = {
+  previewUrl: string;
+  dataUrl: string;
+  name: string;
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
-const CHAT_TIMEOUT_MS = 15000;
+const ANALYZE_TIMEOUT_MS = 20000;
 
 function toText(value: unknown): string {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -71,14 +68,7 @@ function toList(value: unknown): string[] {
   return [];
 }
 
-function toReadableLabel(value: string): string {
-  return value
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function badgeTone(confidence?: number): string {
+function confidenceTone(confidence?: number): string {
   if (typeof confidence !== "number") {
     return "bg-slate-100 text-slate-700";
   }
@@ -94,52 +84,74 @@ function badgeTone(confidence?: number): string {
   return "bg-rose-50 text-rose-700";
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        resolve(result);
+      } else {
+        reject(new Error("Unable to read image"));
+      }
+    };
+    reader.onerror = () => reject(new Error("Unable to read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function CropAdvisoryPage() {
   const { latitude, longitude, placeName } = useLocation();
-  const [crop, setCrop] = useState("");
-  const [symptoms, setSymptoms] = useState("");
-  const [diseaseHint, setDiseaseHint] = useState("");
-  const [language, setLanguage] = useState("English");
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+  const [manualNote, setManualNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<CropAdvisoryData | null>(null);
-  const [summary, setSummary] = useState("");
+  const [result, setResult] = useState<CropAdvisoryResponse | null>(null);
 
-  const canSubmit = useMemo(() => symptoms.trim().length > 0 && !loading, [symptoms, loading]);
+  const treatment = useMemo(() => toList(result?.treatment), [result]);
+  const prevention = useMemo(() => toList(result?.prevention), [result]);
+
+  const canSubmit = Boolean(selectedImage || manualNote.trim()) && !loading;
+
+  const handleImageSelect = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const dataUrl = await readFileAsDataUrl(file);
+    setSelectedImage({
+      previewUrl: dataUrl,
+      dataUrl,
+      name: file.name,
+    });
+    setError("");
+    event.target.value = "";
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const cleanSymptoms = symptoms.trim();
-    if (!cleanSymptoms || loading) {
+    if (!canSubmit) {
       return;
     }
 
     setLoading(true);
     setError("");
     setResult(null);
-    setSummary("");
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+    const timeoutId = window.setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
 
     try {
-      const query = [
-        crop.trim() ? `Crop: ${crop.trim()}` : "",
-        cleanSymptoms ? `Symptoms: ${cleanSymptoms}` : "",
-        diseaseHint.trim() ? `Possible disease: ${diseaseHint.trim()}` : "",
-      ]
-        .filter(Boolean)
-        .join(". ");
-
-      const response = await fetch(`${API_BASE_URL}/chat`, {
+      const response = await fetch(`${API_BASE_URL}/analyze-crop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          query,
-          crop: crop.trim() || undefined,
-          disease: diseaseHint.trim() || undefined,
-          language,
+          image: selectedImage?.dataUrl,
+          query: manualNote.trim() || undefined,
           location: {
             latitude,
             longitude,
@@ -149,19 +161,18 @@ export default function CropAdvisoryPage() {
         signal: controller.signal,
       });
 
-      const data = (await response.json().catch(() => ({}))) as CropChatResponse;
+      const data = (await response.json().catch(() => ({}))) as CropAdvisoryResponse;
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Unable to fetch crop advice right now");
+        throw new Error(data.error ?? "Could not detect clearly, try again");
       }
 
-      setResult(data.crops ?? null);
-      setSummary(data.final_message ?? data.reply ?? "");
+      setResult(data);
     } catch (submissionError) {
       const message =
         submissionError instanceof DOMException && submissionError.name === "AbortError"
-          ? "The request took too long. Please try again."
-          : "The advisory service is unavailable right now. Please try again.";
+          ? "Analyzing crop..."
+          : "Could not detect clearly, try again";
       setError(message);
     } finally {
       window.clearTimeout(timeoutId);
@@ -169,25 +180,18 @@ export default function CropAdvisoryPage() {
     }
   };
 
-  const treatment = toList(result?.treatment);
-  const prevention = toList(result?.prevention);
-  const recommendations = toList(result?.crop_recommendation);
-  const warnings = toList(result?.warnings);
-
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-8">
         <section className="rounded-[2rem] border border-lime-200/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] backdrop-blur-sm sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-lime-700">
-                Crop Advisory
-              </p>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-lime-700">Crop Advisory</p>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                Get disease-aware crop advice from live field context.
+                Scan a crop leaf or describe the symptoms.
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                We combine your location, current weather, and live soil data to return a clean advisory card with disease, cause, treatment, and prevention.
+                The system uses your image first, then combines weather, soil, and location data to return farmer-friendly disease advice.
               </p>
             </div>
             <div className="rounded-[1.75rem] bg-lime-50 px-4 py-3 text-sm font-semibold text-lime-900 shadow-sm ring-1 ring-lime-100">
@@ -207,71 +211,107 @@ export default function CropAdvisoryPage() {
           </div>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="grid gap-5 lg:grid-cols-[1fr_0.95fr]">
           <form
             onSubmit={handleSubmit}
             className="space-y-5 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8"
           >
-            <div className="space-y-3">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
-                Crop details
-              </p>
+            <div className="rounded-[1.75rem] border border-dashed border-lime-200 bg-lime-50/70 p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-lime-700 shadow-sm">
+                  <ImageIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-700">Image scan</p>
+                  <p className="mt-1 text-sm text-slate-600">Upload a photo or use your phone camera.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => uploadInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-lime-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-lime-800"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-lime-200 bg-white px-4 py-3 text-sm font-semibold text-lime-900 transition hover:bg-lime-100"
+                >
+                  <Camera className="h-4 w-4" />
+                  Camera capture
+                </button>
+              </div>
+
               <input
-                value={crop}
-                onChange={(event) => setCrop(event.target.value)}
-                placeholder="Crop name, e.g. tomato, cotton, soybean"
-                className="h-12 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
+                ref={uploadInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
               />
-              <textarea
-                value={symptoms}
-                onChange={(event) => setSymptoms(event.target.value)}
-                placeholder="Describe the symptoms: yellow spots, curled leaves, wilting, etc."
-                className="min-h-[180px] w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleImageSelect}
               />
+
+              {selectedImage ? (
+                <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-white bg-white shadow-sm">
+                  <img
+                    src={selectedImage.previewUrl}
+                    alt="Selected crop preview"
+                    className="h-64 w-full object-cover"
+                  />
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-slate-700">
+                    <span className="truncate font-medium">{selectedImage.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImage(null)}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 flex min-h-[16rem] items-center justify-center rounded-[1.5rem] border border-dashed border-lime-200 bg-white/80 px-6 py-8 text-center text-sm text-slate-500">
+                  Preview selected image will appear here.
+                </div>
+              )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Possible disease hint
-                </label>
-                <input
-                  value={diseaseHint}
-                  onChange={(event) => setDiseaseHint(event.target.value)}
-                  placeholder="Optional"
-                  className="h-12 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Language
-                </label>
-                <select
-                  value={language}
-                  onChange={(event) => setLanguage(event.target.value)}
-                  className="h-12 w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
-                >
-                  <option>English</option>
-                  <option>Hindi</option>
-                  <option>Marathi</option>
-                </select>
-              </div>
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">or describe manually</p>
+              <textarea
+                value={manualNote}
+                onChange={(event) => setManualNote(event.target.value)}
+                placeholder="Describe the symptoms if you cannot upload a photo. Example: yellow spots on leaves, curled edges, wilting."
+                className="min-h-[160px] w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
+              />
             </div>
 
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-lime-700 px-5 text-sm font-semibold text-white transition hover:bg-lime-800 disabled:cursor-not-allowed disabled:bg-lime-400"
+              className="inline-flex h-14 w-full items-center justify-center rounded-[1.5rem] bg-lime-700 px-5 text-base font-semibold text-white transition hover:bg-lime-800 disabled:cursor-not-allowed disabled:bg-lime-400"
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Analyzing crop...
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Get advisory
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  Scan Crop
                 </>
               )}
             </button>
@@ -286,34 +326,33 @@ export default function CropAdvisoryPage() {
           <aside className="space-y-4 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-lime-700">
-                  Result
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-900">Field diagnosis</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-lime-700">Result</p>
+                <h2 className="mt-2 text-2xl font-semibold text-slate-900">Crop diagnosis</h2>
               </div>
-              <span className={`rounded-full px-3 py-2 text-sm font-semibold ${badgeTone(result?.confidence)}`}>
+              <span className={`rounded-full px-3 py-2 text-sm font-semibold ${confidenceTone(result?.confidence)}`}>
                 {typeof result?.confidence === "number" ? `${result.confidence}% confidence` : "Waiting"}
               </span>
             </div>
 
-            {summary ? (
-              <div className="rounded-[1.75rem] border border-lime-100 bg-lime-50 p-5 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-700">Farmer summary</p>
-                <p className="mt-3 text-sm leading-7 text-slate-700">{summary}</p>
-              </div>
-            ) : null}
-
             {result ? (
               <div className="space-y-4">
+                {selectedImage ? (
+                  <article className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+                    <img
+                      src={selectedImage.previewUrl}
+                      alt="Uploaded crop"
+                      className="h-56 w-full object-cover"
+                    />
+                  </article>
+                ) : null}
+
                 <article className="rounded-[1.75rem] border border-rose-100 bg-rose-50 p-5 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-rose-700 shadow-sm">
-                      <ShieldAlert className="h-5 w-5" />
+                      <Sparkles className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
-                        Disease name
-                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">Disease name</p>
                       <p className="mt-1 text-xl font-semibold text-slate-900">
                         {result.disease || "Unknown condition"}
                       </p>
@@ -327,11 +366,9 @@ export default function CropAdvisoryPage() {
                       <AlertTriangle className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-                        Root cause
-                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Symptoms</p>
                       <p className="mt-1 text-sm leading-7 text-slate-700">
-                        {result.root_cause || "No root cause returned yet."}
+                        {result.symptoms || "Could not detect clearly, try again."}
                       </p>
                     </div>
                   </div>
@@ -343,9 +380,7 @@ export default function CropAdvisoryPage() {
                       <ClipboardList className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-lime-700">
-                        Treatment
-                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-lime-700">Treatment</p>
                       <p className="mt-1 text-sm leading-7 text-slate-600">
                         Start with the cheapest step first.
                       </p>
@@ -377,9 +412,7 @@ export default function CropAdvisoryPage() {
                       <BadgeCheck className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
-                        Prevention
-                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Prevention</p>
                       <p className="mt-1 text-sm leading-7 text-slate-700">
                         Keep watching the crop after the first fix.
                       </p>
@@ -388,7 +421,10 @@ export default function CropAdvisoryPage() {
                   <div className="mt-4 grid gap-3">
                     {prevention.length > 0 ? (
                       prevention.map((step) => (
-                        <div key={step} className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm">
+                        <div
+                          key={step}
+                          className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm"
+                        >
                           {step}
                         </div>
                       ))
@@ -401,21 +437,9 @@ export default function CropAdvisoryPage() {
                 </article>
 
                 <article className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 shadow-sm">
-                      <CloudRain className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Live context
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">
-                        Based on the current weather and soil conditions.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {[
+                      ["Source", result.source ?? "text"],
                       ["Season", result.context?.season],
                       ["Soil type", result.context?.soil_type],
                       ["Weather summary", result.context?.weather_summary],
@@ -428,34 +452,13 @@ export default function CropAdvisoryPage() {
                       </div>
                     ))}
                   </div>
-                  {warnings.length > 0 ? (
-                    <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-                      {warnings.map((warning) => (
-                        <p key={warning}>{warning}</p>
-                      ))}
-                    </div>
-                  ) : null}
-                  {recommendations.length > 0 ? (
-                    <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                        Crop recommendation
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {recommendations.map((item) => (
-                          <span key={item} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm">
-                            {toReadableLabel(item)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                 </article>
               </div>
             ) : (
               <div className="rounded-[1.75rem] border border-dashed border-lime-200 bg-lime-50/70 p-6 text-sm leading-7 text-slate-600">
                 <p className="font-semibold text-slate-800">No advisory yet.</p>
                 <p className="mt-2">
-                  Describe the crop symptoms on the left and the system will return a disease-aware plan with live weather and soil context.
+                  Upload a crop image or describe the symptoms manually to get an instant disease-aware plan.
                 </p>
               </div>
             )}

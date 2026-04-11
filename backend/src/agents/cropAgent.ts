@@ -335,7 +335,7 @@ export async function generateCropAdvice(input: CropAdviceInput): Promise<CropAd
   const diseaseInference = normalizedInput.disease
     ? {
         disease_name: normalizedInput.disease,
-        confidence: 100,
+        confidence: normalizedInput.diseaseConfidence ?? 100,
       }
     : await inferDisease(normalizedInput.query || `${normalizedInput.crop ?? ""} crop symptom analysis`).catch(
         () => ({ disease_name: "Unknown condition", confidence: 0 }),
