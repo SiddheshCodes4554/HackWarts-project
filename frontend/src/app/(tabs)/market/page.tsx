@@ -1,56 +1,41 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  ChartColumn,
-  Clock3,
+  ArrowRight,
+  BarChart3,
+  Flame,
+  Leaf,
   Loader2,
   MapPin,
-  Phone,
-  TrendingUp,
-  Wheat,
+  Search,
 } from "lucide-react";
 import { useLocation } from "../../../context/LocationContext";
 import { useUser } from "@/context/UserContext";
+import { CommoditySearch } from "@/components/CommoditySearch";
+import { TrendingCommodities } from "@/components/TrendingCommodities";
 
-type MarketRecord = {
-  market: string;
-  district: string;
-  state: string;
-  modal_price: number;
-  distance_km: number;
-  transport_cost: number;
-  commission: number;
-  net_per_quintal: number;
-  arrivals_qtl: number;
-  source: string;
+type CommodityItem = {
+  name: string;
+  category: string;
 };
 
-type MarketIntelligenceResponse = {
+type TrendItem = {
   commodity: string;
-  district: string;
-  state: string;
-  source: string;
-  sell_signal: "SELL NOW" | "HOLD 7 DAYS" | "SELL TODAY";
-  signal_reason: string;
-  ninety_day_average: number;
-  latest_price: number;
-  price_change_percent: number;
-  chart: Array<{ date: string; price: number; arrivals_qtl: number }>;
-  markets: MarketRecord[];
-  best_market: MarketRecord | null;
-  note: string;
-  error?: string;
+  currentPrice: number;
+  sevenDayAvg: number;
+  changePct: number;
+  trend: "RISING" | "FALLING" | "STABLE";
+  demandSignal: "HIGH" | "MEDIUM" | "LOW";
 };
 
-type AlertSubscription = {
-  id: string;
-  commodity: string;
-  targetPrice: number;
-  contact: string;
-  createdAt: string;
+type TrendingPayload = {
+  rising: TrendItem[];
+  falling: TrendItem[];
+  stable: TrendItem[];
+  mostProfitable: TrendItem | null;
 };
 
 const API_BASE_URL = (
@@ -58,142 +43,138 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   ""
 ).replace(/\/$/, "");
-const DEFAULT_COMMODITIES = ["Tomato", "Onion", "Wheat", "Rice", "Soybean"];
+
+const CATEGORIES = ["All", "Grains", "Vegetables", "Fruits"] as const;
+
+function getApiBase(): string {
+  if (
+    typeof window !== "undefined" &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1" &&
+    (!API_BASE_URL || /localhost|127\.0\.0\.1/i.test(API_BASE_URL))
+  ) {
+    return "/api";
+  }
+
+  return API_BASE_URL || "/api";
+}
 
 function formatPrice(value: number): string {
-  return `₹${Math.round(value).toLocaleString("en-IN")}/qtl`;
+  return `Rs ${Math.round(value).toLocaleString("en-IN")}/qtl`;
 }
 
-function signalTone(signal: MarketIntelligenceResponse["sell_signal"]): string {
-  if (signal === "SELL NOW") {
-    return "bg-emerald-50 text-emerald-700";
-  }
-
-  if (signal === "HOLD 7 DAYS") {
-    return "bg-amber-50 text-amber-700";
-  }
-
-  return "bg-rose-50 text-rose-700";
+function formatCoordinate(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(4) : "--";
 }
 
-function buildBars(chart: MarketIntelligenceResponse["chart"]) {
-  const rows = chart.slice(-30);
-  const maxPrice = Math.max(...rows.map((entry) => entry.price), 1);
+function normalizeLocationPart(value: string): string {
+  return value.replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
+}
 
-  return rows.map((entry) => ({
-    ...entry,
-    height: Math.max(10, Math.round((entry.price / maxPrice) * 100)),
-  }));
+function splitLocation(place: string): { district: string; state: string } {
+  const [rawDistrict = "", rawState = ""] = place.split(",");
+  const district = normalizeLocationPart(rawDistrict);
+  const state = normalizeLocationPart(rawState);
+  return {
+    district: district || "Pune",
+    state: state || "Maharashtra",
+  };
 }
 
 export default function MarketPage() {
   const { latitude, longitude, placeName } = useLocation();
-    const router = useRouter();
-    const { user, profile } = useUser();
+  const router = useRouter();
+  const { user, profile } = useUser();
 
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
   const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
-  const effectivePlaceName = profile?.location_name || placeName;
-  
-    // Protect route
-    useEffect(() => {
-      if (!user || !profile) {
-        router.push(user ? '/onboarding' : '/login');
-      }
-    }, [user, profile, router]);
+  const effectivePlaceName = profile?.location_name || placeName || "Unknown";
+  const locationParts = splitLocation(effectivePlaceName);
+  const effectiveDistrict = locationParts.district;
+  const effectiveState = locationParts.state;
 
-  const [commodity, setCommodity] = useState("Tomato");
-  const [marketData, setMarketData] = useState<MarketIntelligenceResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [alertPrice, setAlertPrice] = useState("");
-  const [alertContact, setAlertContact] = useState("");
-  const [alertMessage, setAlertMessage] = useState("");
-  const [savingAlert, setSavingAlert] = useState(false);
+  const apiBase = useMemo(() => getApiBase(), []);
 
   useEffect(() => {
-    const controller = new AbortController();
+    if (!user || !profile) {
+      router.push(user ? "/onboarding" : "/login");
+    }
+  }, [user, profile, router]);
 
-    const load = async () => {
-      setLoading(true);
+  const [selectedCommodity, setSelectedCommodity] = useState<CommodityItem | null>(null);
+  const [trending, setTrending] = useState<TrendingPayload | null>(null);
+  const [allSuggestions, setAllSuggestions] = useState<CommodityItem[]>([]);
+  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
+  const [loadingTrending, setLoadingTrending] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadSuggestions = async () => {
+      setLoadingSuggestions(true);
       setError("");
 
       try {
         const params = new URLSearchParams({
-          message: `${commodity} mandi price intelligence`,
-          locale: effectivePlaceName,
+          district: effectiveDistrict,
+          state: effectiveState,
         });
-
-        if (Number.isFinite(effectiveLatitude)) {
-          params.set("latitude", String(effectiveLatitude));
-        }
-
-        if (Number.isFinite(effectiveLongitude)) {
-          params.set("longitude", String(effectiveLongitude));
-        }
-
-        const response = await fetch(`${API_BASE_URL}/market-intelligence?${params.toString()}`, {
-          signal: controller.signal,
-        });
-        const data = (await response.json().catch(() => ({}))) as MarketIntelligenceResponse;
+        const response = await fetch(`${apiBase}/commodities/list?${params.toString()}`, { cache: "no-store" });
+        const data = (await response.json().catch(() => ({}))) as { commodities?: CommodityItem[]; error?: string };
 
         if (!response.ok) {
-          throw new Error(data.error ?? "Unable to load market intelligence");
+          throw new Error(data.error ?? "Unable to load commodity list");
         }
 
-        setMarketData(data);
-      } catch (loadError) {
-        if (loadError instanceof DOMException && loadError.name === "AbortError") {
-          return;
+        const commodities = data.commodities ?? [];
+        setAllSuggestions(commodities);
+        if (!selectedCommodity && commodities[0]) {
+          setSelectedCommodity(commodities[0]);
         }
-
-        setError("Unable to load live market data right now.");
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : "Unable to load commodity list.");
       } finally {
-        setLoading(false);
+        setLoadingSuggestions(false);
       }
     };
 
-    void load();
+    void loadSuggestions();
+  }, [apiBase, effectiveDistrict, effectiveState, selectedCommodity]);
 
-    return () => controller.abort();
-  }, [commodity, effectiveLatitude, effectiveLongitude, effectivePlaceName]);
+  useEffect(() => {
+    const loadTrending = async () => {
+      setLoadingTrending(true);
+      setError("");
 
-  const chart = useMemo(() => buildBars(marketData?.chart ?? []), [marketData]);
-  const bestMarket = marketData?.best_market ?? null;
+      try {
+        const params = new URLSearchParams({
+          district: effectiveDistrict,
+          state: effectiveState,
+        });
+        const response = await fetch(`${apiBase}/market/trending?${params.toString()}`, { cache: "no-store" });
+        const data = (await response.json().catch(() => ({}))) as TrendingPayload & { error?: string };
 
-  const handleAlertSave = async () => {
-    if (!marketData || !alertPrice || !alertContact) {
-      return;
-    }
+        if (!response.ok) {
+          throw new Error(data.error ?? "Unable to load trending market data");
+        }
 
-    setSavingAlert(true);
-    setAlertMessage("");
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/market-alerts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          commodity: marketData.commodity,
-          targetPrice: Number(alertPrice),
-          contact: alertContact,
-        }),
-      });
-
-      const data = (await response.json().catch(() => ({}))) as AlertSubscription | { error?: string };
-      if (!response.ok) {
-        throw new Error((data as { error?: string }).error ?? "Unable to save alert");
+        setTrending(data);
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : "Unable to load trending commodities.");
+      } finally {
+        setLoadingTrending(false);
       }
+    };
 
-      setAlertMessage(`Alert saved for ${marketData.commodity} at ${formatPrice(Number(alertPrice))}`);
-      setAlertPrice("");
-      setAlertContact("");
-    } catch {
-      setAlertMessage("Unable to save alert right now.");
-    } finally {
-      setSavingAlert(false);
+    void loadTrending();
+  }, [apiBase, effectiveDistrict, effectiveState]);
+
+  const filteredCommodities = useMemo(() => {
+    if (category === "All") {
+      return allSuggestions;
     }
-  };
+    return allSuggestions.filter((item) => item.category === category);
+  }, [allSuggestions, category]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
@@ -202,14 +183,14 @@ export default function MarketPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-lime-700">
-                <ChartColumn className="h-4 w-4" />
+                <BarChart3 className="h-4 w-4" />
                 Market Intelligence
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                Live mandi prices, transport-aware profit, and sell timing.
+                Real-time commodity search and district-wise analytics.
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Compare the top 5 nearest markets by net return, check the 90-day trend, and save a price alert for later.
+                Search commodities, track rising/falling crops, and open detailed analytics with live AGMARKNET market intelligence.
               </p>
             </div>
             <div className="rounded-[1.75rem] bg-lime-50 px-4 py-3 text-sm font-semibold text-lime-900 shadow-sm ring-1 ring-lime-100">
@@ -218,220 +199,140 @@ export default function MarketPage() {
                 <MapPin className="h-4 w-4" />
                 {effectivePlaceName}
               </span>
+              <p className="mt-1 text-xs font-medium text-lime-700">
+                {effectiveDistrict}, {effectiveState}
+              </p>
             </div>
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
-          <label className="mb-2 block text-sm font-medium text-slate-700">Select your commodity</label>
-          <select
-            value={commodity}
-            onChange={(event) => setCommodity(event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
-          >
-            {DEFAULT_COMMODITIES.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </section>
-
         {error ? (
-          <section className="rounded-[1.75rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <section className="rounded-[1.75rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">
             {error}
           </section>
         ) : null}
 
-        <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <article className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Sell signal</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-900">
-                  {loading ? "Analyzing..." : marketData?.sell_signal ?? "Waiting"}
-                </h2>
-              </div>
-              <span className={`rounded-full px-3 py-2 text-sm font-semibold ${signalTone(marketData?.sell_signal ?? "SELL NOW")}`}>
-                {loading ? "Loading" : marketData?.source ?? "live"}
-              </span>
-            </div>
-            <p className="mt-4 text-sm leading-7 text-slate-700">{marketData?.signal_reason ?? "Pulling live market comparison and trend data..."}</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-[1.5rem] bg-lime-50 p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-lime-700">Latest price</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">
-                  {marketData ? formatPrice(marketData.latest_price) : "--"}
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] bg-sky-50 p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">90d average</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">
-                  {marketData ? formatPrice(marketData.ninety_day_average) : "--"}
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] bg-amber-50 p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Change</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">
-                  {marketData ? `${marketData.price_change_percent.toFixed(1)}%` : "--"}
-                </p>
-              </div>
-            </div>
-          </article>
+        <section className="space-y-4 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <Search className="h-4 w-4 text-lime-700" />
+            Smart Commodity Search
+          </div>
 
-          <article className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
-            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
-              30-day price chart
-            </div>
-            <div className="mt-4 flex h-64 items-end gap-1 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
-              {chart.length > 0 ? (
-                chart.map((bar) => (
-                  <div key={bar.date} className="flex h-full flex-1 items-end justify-center">
-                    <div className="flex w-full max-w-[10px] flex-col items-center justify-end gap-2">
-                      <div
-                        className="w-full rounded-t-full bg-lime-600"
-                        style={{ height: `${bar.height}%` }}
-                        title={`${bar.date}: ${bar.price}`}
-                      />
-                      <span className="text-[10px] text-slate-400">.</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="flex w-full items-center justify-center text-sm text-slate-500">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "No chart data yet"}
-                </div>
-              )}
-            </div>
-          </article>
+          <CommoditySearch
+            state={effectiveState}
+            district={effectiveDistrict}
+            value={selectedCommodity?.name ?? ""}
+            onSelect={(item) => setSelectedCommodity(item)}
+          />
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            {CATEGORIES.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setCategory(item)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  category === item ? "bg-lime-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {filteredCommodities.slice(0, 8).map((item) => (
+              <button
+                type="button"
+                key={item.name}
+                onClick={() => setSelectedCommodity(item)}
+                className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                  selectedCommodity?.name === item.name
+                    ? "border-lime-300 bg-lime-50 text-lime-900"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-lime-200"
+                }`}
+              >
+                <p className="font-semibold">{item.name}</p>
+                <p className="text-xs text-slate-500">{item.category}</p>
+              </button>
+            ))}
+          </div>
+
+          {loadingSuggestions ? (
+            <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading district commodity inventory...
+            </p>
+          ) : null}
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-lime-700">Top 5 nearest mandis</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-900">Net profit after transport</h2>
-              </div>
-              <span className="rounded-2xl bg-lime-50 px-3 py-2 text-xs font-semibold text-lime-800">
-                Rs 8/km/qtl + 1.5% commission
-              </span>
-            </div>
+        <section className="rounded-[2rem] border border-emerald-100 bg-white/95 p-6 shadow-sm sm:p-8">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            <Flame className="h-4 w-4" />
+            Trending Now
+          </div>
 
-            <div className="mt-5 space-y-3">
-              {marketData?.markets.map((item) => (
-                <div key={`${item.market}-${item.district}`} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{item.market}</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(item.net_per_quintal)}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Modal {formatPrice(item.modal_price)} | Distance {item.distance_km.toFixed(1)} km | Commission ₹{item.commission.toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm">
-                        {item.arrivals_qtl} qtl arrivals
-                      </span>
-                      {bestMarket?.market === item.market ? (
-                        <span className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 shadow-sm">
-                          Best net return
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
+          <TrendingCommodities
+            data={trending}
+            loading={loadingTrending}
+            onSelectCommodity={(commodity) => {
+              const selected = allSuggestions.find((item) => item.name.toLowerCase() === commodity.toLowerCase()) ?? {
+                name: commodity,
+                category: "Other",
+              };
+              setSelectedCommodity(selected);
+            }}
+          />
+        </section>
 
-          <aside className="space-y-5 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
-            <div className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
-                  <Wheat className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Best market</p>
-                  <p className="mt-1 text-xl font-semibold text-slate-900">{bestMarket?.market ?? "--"}</p>
-                </div>
-              </div>
-              <p className="mt-4 text-sm leading-7 text-slate-700">
-                {marketData?.note ?? "Best-market recommendation will appear here once live price data loads."}
+        <section className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          <article className="rounded-3xl border border-lime-100 bg-white/95 p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Selected Commodity</h3>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{selectedCommodity?.name ?? "Select a commodity"}</p>
+            <p className="mt-1 text-sm text-slate-500">{selectedCommodity?.category ?? "--"}</p>
+
+            <div className="mt-5 rounded-2xl border border-lime-100 bg-lime-50 p-4 text-sm text-lime-900">
+              Live analytics are location-aware and fetched using AGMARKNET data for {effectiveDistrict}, {effectiveState}.
+              <p className="mt-2 text-xs text-lime-700">
+                Coordinates: {formatCoordinate(effectiveLatitude)}, {formatCoordinate(effectiveLongitude)}
               </p>
             </div>
 
-            <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                90-day sell timing
-              </div>
-              <div className="mt-4 space-y-3 text-sm leading-7 text-slate-700">
-                <p>
-                  If latest price is above the 90-day average by 12% or more, the system marks <strong>SELL NOW</strong>.
-                </p>
-                <p>
-                  If trend is rising and arrivals are falling, the system suggests <strong>HOLD 7 DAYS</strong>.
-                </p>
-                <p>
-                  For storage risk or fast spoilage, the system returns <strong>SELL TODAY</strong>.
-                </p>
-              </div>
-            </div>
+            <Link
+              href={selectedCommodity ? `/market/${encodeURIComponent(selectedCommodity.name)}` : "/market"}
+              className={`mt-6 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${
+                selectedCommodity ? "bg-lime-700 text-white hover:bg-lime-800" : "bg-slate-200 text-slate-500"
+              }`}
+            >
+              Open Detailed Analytics <ArrowRight className="h-4 w-4" />
+            </Link>
+          </article>
 
-            <div className="rounded-[1.75rem] border border-lime-100 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-lime-700">
-                <Phone className="h-4 w-4" />
-                Price alert subscription
-              </div>
-              <div className="mt-4 space-y-3">
-                <input
-                  value={alertPrice}
-                  onChange={(event) => setAlertPrice(event.target.value)}
-                  placeholder="Target price per quintal"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
-                />
-                <input
-                  value={alertContact}
-                  onChange={(event) => setAlertContact(event.target.value)}
-                  placeholder="Phone or email for alert"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
-                />
+          <article className="rounded-3xl border border-slate-100 bg-white/95 p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Recommended for You</h3>
+            <p className="mt-3 text-xl font-semibold text-slate-900">{trending?.mostProfitable?.commodity ?? "--"}</p>
+            <p className="mt-2 text-sm text-slate-600">
+              {trending?.mostProfitable
+                ? `${formatPrice(trending.mostProfitable.currentPrice)} | ${trending.mostProfitable.changePct >= 0 ? "+" : ""}${trending.mostProfitable.changePct.toFixed(1)}% | Demand ${trending.mostProfitable.demandSignal}`
+                : "Market recommendation will appear after trend analysis loads."}
+            </p>
+
+            <div className="mt-5 space-y-2">
+              {(trending?.rising ?? []).slice(0, 2).map((item) => (
                 <button
+                  key={`quick-${item.commodity}`}
                   type="button"
-                  onClick={handleAlertSave}
-                  disabled={savingAlert}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-lime-700 px-4 text-sm font-semibold text-white transition hover:bg-lime-800 disabled:cursor-not-allowed disabled:bg-lime-400"
+                  onClick={() => setSelectedCommodity({ name: item.commodity, category: "Other" })}
+                  className="flex w-full items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-left"
                 >
-                  {savingAlert ? <Loader2 className="h-4 w-4 animate-spin" /> : "Subscribe"}
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                    <Leaf className="h-4 w-4" />
+                    {item.commodity}
+                  </span>
+                  <span className="text-sm font-semibold text-emerald-700">+{item.changePct.toFixed(1)}%</span>
                 </button>
-                {alertMessage ? <p className="text-sm text-slate-600">{alertMessage}</p> : null}
-              </div>
+              ))}
             </div>
-
-            {loading ? (
-              <div className="rounded-[1.75rem] border border-dashed border-lime-200 bg-lime-50/60 p-5 text-sm text-slate-600">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-lime-700" />
-                  Updating live market intelligence...
-                </div>
-              </div>
-            ) : null}
-          </aside>
-        </section>
-
-        <section className="rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-sm sm:p-8">
-          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            <Clock3 className="h-4 w-4 text-sky-600" />
-            Market notes
-          </div>
-          <p className="mt-4 text-sm leading-7 text-slate-700">
-            The page refreshes the commodity snapshot on selection change and uses live route distance when available. If an upstream data feed is unavailable, the service falls back to deterministic historical data so the workflow still works.
-          </p>
-          <p className="mt-3 text-sm leading-7 text-slate-700">
-            Nearby mandis are ranked by net return per quintal using modal price, transport cost, and commission. The sell signal uses the latest price versus the 90-day average, plus trend and arrivals.
-          </p>
+          </article>
         </section>
       </div>
     </main>

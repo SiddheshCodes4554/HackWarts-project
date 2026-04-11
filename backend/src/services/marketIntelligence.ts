@@ -1,8 +1,8 @@
 import { AgentContext } from "../utils/types";
 
-const AGMARKNET_API_URL = process.env.AGMARKNET_API_URL ?? "";
+const AGMARKNET_API_URL = process.env.AGMARKNET_API_URL ?? "https://api.data.gov.in/resource";
 const AGMARKNET_API_KEY = process.env.AGMARKNET_API_KEY ?? "";
-const AGMARKNET_RESOURCE_ID = process.env.AGMARKNET_RESOURCE_ID ?? "";
+const AGMARKNET_RESOURCE_ID = process.env.AGMARKNET_RESOURCE_ID ?? "9ef84268-d588-465a-a308-a864a43d0070";
 const OSRM_BASE_URL = process.env.OSRM_BASE_URL ?? "https://router.project-osrm.org";
 const MARKET_TIMEOUT_MS = 12_000;
 const OSRM_TIMEOUT_MS = 4_000;
