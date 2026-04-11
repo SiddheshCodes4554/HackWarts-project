@@ -23,6 +23,15 @@ type QueryLocation = {
   incomeLevel?: string;
 };
 
+function numericMetadata(metadata: Record<string, string | number | boolean> | undefined, key: string): number {
+  const value = metadata?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  throw new Error(`Missing numeric metadata key: ${key}`);
+}
+
 function toStructuredAgentOutput(result?: AgentResult): Record<string, unknown> {
   if (!result) {
     return {};
@@ -82,10 +91,9 @@ export async function handleQuery(
         placeName: location?.placeName ?? context.locale ?? "Nagpur, Maharashtra",
       },
       weather: {
-        temperature:
-          typeof weatherData.metadata?.temperature === "number" ? weatherData.metadata.temperature : 30,
-        rainfall: typeof weatherData.metadata?.rainfall === "number" ? weatherData.metadata.rainfall : 0,
-        humidity: typeof weatherData.metadata?.humidity === "number" ? weatherData.metadata.humidity : 60,
+        temperature: numericMetadata(weatherData.metadata, "temperature"),
+        rainfall: numericMetadata(weatherData.metadata, "rainfall"),
+        humidity: numericMetadata(weatherData.metadata, "humidity"),
       },
       soil: soilData,
       crop: selectedCrop,

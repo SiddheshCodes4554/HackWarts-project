@@ -1,6 +1,8 @@
 import { buildCropContext } from "../services/cropContextBuilder";
 import {
+  AgentContext,
   CropAdviceInput,
+  CropDashboardInsight,
   CropAdviceResult,
   CropWeather,
   SoilProfile,
@@ -229,7 +231,7 @@ function deriveWarnings(input: CropAdviceInput, context: ReturnType<typeof build
   const humidity = input.weather.humidity;
   const soilType = context.soil_type.toLowerCase();
 
-  if (soilType.includes("acidic") || (input.soil.ph !== null && input.soil.ph < 6)) {
+  if (soilType.includes("acidic") || input.soil.ph < 6) {
     warnings.push("Soil is acidic. Avoid wheat and apply lime before sowing.");
   }
 
@@ -237,7 +239,7 @@ function deriveWarnings(input: CropAdviceInput, context: ReturnType<typeof build
     warnings.push("High humidity can increase fungal risk. Keep leaves dry and improve air flow.");
   }
 
-  if (input.soil.nitrogen !== null && input.soil.nitrogen < 0.05) {
+  if (input.soil.nitrogen < 0.05) {
     warnings.push("Low nitrogen detected. Use a small dose of nitrogen fertilizer after soil testing.");
   }
 
@@ -254,7 +256,7 @@ function applyRuleValidation(
   const prevention = [...advice.prevention];
   let cropRecommendation = [...advice.crop_recommendation];
 
-  if (context.soil_type.toLowerCase().includes("acidic") || (input.soil.ph !== null && input.soil.ph < 6)) {
+  if (context.soil_type.toLowerCase().includes("acidic") || input.soil.ph < 6) {
     const limeStep = "Apply agricultural lime as per local soil test recommendation.";
     if (!treatment.some((step) => step.toLowerCase().includes("lime"))) {
       treatment.unshift(limeStep);
@@ -269,7 +271,7 @@ function applyRuleValidation(
     }
   }
 
-  if (input.soil.nitrogen !== null && input.soil.nitrogen < 0.05) {
+  if (input.soil.nitrogen < 0.05) {
     const fertilizerStep = "Add a balanced nitrogen fertilizer in small doses after irrigation.";
     if (!treatment.some((step) => step.toLowerCase().includes("nitrogen"))) {
       treatment.push(fertilizerStep);
@@ -393,4 +395,61 @@ export async function generateCropAdvice(input: CropAdviceInput): Promise<CropAd
     console.error("generateCropAdvice fallback", error);
     return fallbackCropAdvice(normalizedInput, context, diseaseInference.disease_name, diseaseInference.confidence);
   }
+}
+
+type CropRecommendationModel = {
+  recommendations?: Array<{
+    crop?: string;
+    season?: string;
+    reasoning?: string;
+  }>;
+  summary?: string;
+};
+
+function normalizeCropDashboard(value: CropRecommendationModel): CropDashboardInsight {
+  const recommendations = Array.isArray(value.recommendations)
+    ? value.recommendations
+        .map((entry) => {
+          const crop = sanitizeText(entry.crop, "");
+          const season = sanitizeText(entry.season, "");
+          const reasoning = sanitizeText(entry.reasoning, "");
+          if (!crop || !season || !reasoning) {
+            return null;
+          }
+
+          return { crop, season, reasoning };
+        })
+        .filter((entry): entry is { crop: string; season: string; reasoning: string } => Boolean(entry))
+        .slice(0, 3)
+    : [];
+
+  if (!recommendations.length) {
+    throw new Error("Crop recommendation model returned no valid recommendations");
+  }
+
+  return {
+    recommendations,
+    summary: sanitizeText(value.summary, `Best for your soil + weather: ${recommendations[0].crop}`),
+  };
+}
+
+export async function cropAgent(context: AgentContext, weather: CropWeather, soil: SoilProfile): Promise<CropDashboardInsight> {
+  const prompt = [
+    "You are an expert agronomist for Indian farms.",
+    `Location: ${context.locale ?? "India"}`,
+    `Weather: ${JSON.stringify(weather)}`,
+    `Soil: ${JSON.stringify(soil)}`,
+    "Return valid JSON with keys:",
+    "- recommendations: array of top 3 items (crop, season, reasoning)",
+    "- summary: one line starting with 'Best for your soil + weather'",
+  ].join("\n");
+
+  const raw = await groqCompletion(prompt);
+  const parsed = parseJsonObject<CropRecommendationModel>(raw);
+
+  if (!parsed) {
+    throw new Error("Crop recommendation response is not valid JSON");
+  }
+
+  return normalizeCropDashboard(parsed);
 }

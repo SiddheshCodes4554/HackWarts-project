@@ -7,6 +7,15 @@ import { CropAdviceInput, CropAdvisoryResponse, CropLocation, ChatRequestPayload
 
 const analyzeCropRouter = Router();
 
+function numericMetadata(metadata: Record<string, string | number | boolean> | undefined, key: string): number {
+  const value = metadata?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  throw new Error(`Missing numeric metadata key: ${key}`);
+}
+
 function toCropLocation(payload: Partial<ChatRequestPayload>): CropLocation {
   const latitude = Number.isFinite(payload.location?.latitude)
     ? (payload.location?.latitude as number)
@@ -77,10 +86,9 @@ analyzeCropRouter.post("/analyze-crop", async (req: Request, res: Response) => {
         placeName: location.placeName,
       },
       weather: {
-        temperature:
-          typeof weatherResult.metadata?.temperature === "number" ? weatherResult.metadata.temperature : 30,
-        rainfall: typeof weatherResult.metadata?.rainfall === "number" ? weatherResult.metadata.rainfall : 0,
-        humidity: typeof weatherResult.metadata?.humidity === "number" ? weatherResult.metadata.humidity : 60,
+        temperature: numericMetadata(weatherResult.metadata, "temperature"),
+        rainfall: numericMetadata(weatherResult.metadata, "rainfall"),
+        humidity: numericMetadata(weatherResult.metadata, "humidity"),
       },
       soil: soilProfile,
       disease: imageAnalysis.disease_name,
