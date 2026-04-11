@@ -24,7 +24,6 @@ import {
 import {
   ArrowRight,
   BarChart3,
-  CloudRain,
   DollarSign,
   Droplets,
   Leaf,
@@ -337,12 +336,6 @@ const featureLinks = [
     href: "/finance",
     icon: DollarSign,
   },
-  {
-    title: "Weather",
-    description: "Forecast and irrigation timing.",
-    href: "/weather",
-    icon: CloudRain,
-  },
 ];
 
 function formatCurrency(value: number): string {
@@ -489,7 +482,7 @@ export default function HomePage() {
               title: "Current Weather",
               value: `${overview.currentTemp.toFixed(1)}°C`,
               trend: `${data?.weather.current.humidity ?? 0}% humidity`,
-              icon: CloudRain,
+              icon: Droplets,
             },
             {
               title: "Avg Mandi Price",

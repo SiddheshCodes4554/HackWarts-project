@@ -133,16 +133,6 @@ export default function RootLayoutClient({
                       Crop Advisory
                     </Link>
                     <Link
-                      href="/weather"
-                      className={`font-medium transition-colors ${
-                        pathname === '/weather'
-                          ? 'text-green-600'
-                          : 'text-gray-600 hover:text-green-600'
-                      }`}
-                    >
-                      Weather
-                    </Link>
-                    <Link
                       href="/finance"
                       className={`font-medium transition-colors ${
                         pathname === '/finance'
@@ -238,13 +228,6 @@ export default function RootLayoutClient({
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       Crop Advisory
-                    </Link>
-                    <Link
-                      href="/weather"
-                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Weather
                     </Link>
                     <Link
                       href="/finance"

@@ -52,6 +52,22 @@ type Metrics = {
 };
 
 const PAGE_SIZE = 8;
+const QUERY_TIMEOUT_MS = 45_000;
+
+async function withTimeout<T>(promise: PromiseLike<T>, label: string, timeoutMs = QUERY_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out. Please retry.`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 function getDistrictFromPlace(place: string): string {
   const [district] = place.split(",");
@@ -114,13 +130,16 @@ export default function CommunityPage() {
       return;
     }
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("id,name,location_name,primary_crop")
-      .in("id", userIds);
+    const profileResult = await withTimeout(
+      supabase
+        .from("profiles")
+        .select("id,name,location_name,primary_crop")
+        .in("id", userIds),
+      "Fetching profiles",
+    ) as { data: ProfileLite[] | null };
 
     const nextMap: Record<string, ProfileLite> = {};
-    (data as ProfileLite[] | null)?.forEach((row) => {
+    (profileResult.data ?? []).forEach((row) => {
       nextMap[row.id] = row;
     });
 
@@ -146,7 +165,7 @@ export default function CommunityPage() {
         .from("post_shares")
         .select("post_id")
         .in("post_id", postIds),
-    ]);
+    ].map((queryPromise, index) => withTimeout(queryPromise, `Fetching community metadata ${index + 1}`)));
 
     const byPostComments: Record<string, CommentRow[]> = {};
     (commentsData as CommentRow[] | null)?.forEach((comment) => {
@@ -206,22 +225,26 @@ export default function CommunityPage() {
 
       let query = supabase
         .from("community_posts")
-        .select("id,user_id,content,crop_tag,district,status,created_at,media_url,media_type,summary,ai_tags,ai_suggestion")
+        .select("*")
         .neq("status", "blocked")
-        .eq("district", districtFilter || preferredDistrict)
         .order("created_at", { ascending: false })
         .range(start, end);
+
+      const effectiveDistrict = (districtFilter || preferredDistrict).trim();
+      if (effectiveDistrict) {
+        query = query.eq("district", effectiveDistrict);
+      }
 
       if (cropFilter !== "all") {
         query = query.eq("crop_tag", cropFilter);
       }
 
-      const { data, error: postsError } = await query;
-      if (postsError) {
-        throw postsError;
+      const postsResult = await withTimeout(query, "Fetching community posts") as { data: CommunityPost[] | null; error: { message: string } | null };
+      if (postsResult.error) {
+        throw postsResult.error;
       }
 
-      const rows = (data as CommunityPost[] | null) ?? [];
+      const rows = postsResult.data ?? [];
       const nextPosts = reset ? rows : [...posts, ...rows];
 
       setPosts(nextPosts);
@@ -234,6 +257,8 @@ export default function CommunityPage() {
       await fetchPostMeta(postIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load community feed");
+      setPosts([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
@@ -322,8 +347,12 @@ export default function CommunityPage() {
         user_id: user.id,
         content,
         crop_tag: postCropTag.trim() || profile?.primary_crop || "General",
-        district: districtFilter || preferredDistrict,
+        district: (districtFilter || preferredDistrict || "General").trim(),
         status: ai.status,
+      };
+
+      const extendedPayload: Record<string, unknown> = {
+        ...payload,
         summary: ai.summary,
         ai_tags: ai.tags,
         ai_suggestion: ai.aiSuggestion,
@@ -331,12 +360,20 @@ export default function CommunityPage() {
       };
 
       if (postMediaUrl.trim()) {
-        payload.media_url = postMediaUrl.trim();
+        extendedPayload.media_url = postMediaUrl.trim();
       }
 
-      const { error: insertError } = await supabase.from("community_posts").insert(payload);
+      const { error: insertError } = await supabase.from("community_posts").insert(extendedPayload);
       if (insertError) {
-        throw insertError;
+        const columnIssue = /column|schema cache|not found|does not exist/i.test(insertError.message || "");
+        if (columnIssue) {
+          const { error: fallbackInsertError } = await supabase.from("community_posts").insert(payload);
+          if (fallbackInsertError) {
+            throw fallbackInsertError;
+          }
+        } else {
+          throw insertError;
+        }
       }
 
       setPostContent("");

@@ -55,6 +55,22 @@ type NotificationItem = {
 };
 
 const LISTING_CACHE_TTL = 30_000;
+const QUERY_TIMEOUT_MS = 45_000;
+
+async function withTimeout<T>(promise: PromiseLike<T>, label: string, timeoutMs = QUERY_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out. Please retry.`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 function districtFromPlace(place: string): { district: string; state: string } {
   const [district = "", state = ""] = place.split(",").map((part) => part.trim());
@@ -164,13 +180,16 @@ export default function MarketplacePage() {
   const fetchProfiles = useCallback(async (ids: string[]) => {
     if (!ids.length) return;
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("id,name,location_name")
-      .in("id", ids);
+    const profileResult = await withTimeout(
+      supabase
+        .from("profiles")
+        .select("id,name,location_name")
+        .in("id", ids),
+      "Fetching profiles",
+    ) as { data: ProfileLite[] | null };
 
     const mapped: Record<string, ProfileLite> = {};
-    (data as ProfileLite[] | null)?.forEach((row) => {
+    (profileResult.data ?? []).forEach((row) => {
       mapped[row.id] = row;
     });
 
@@ -183,19 +202,22 @@ export default function MarketplacePage() {
       return;
     }
 
-    const { data } = await supabase
-      .from("bids")
-      .select("id,listing_id,buyer_id,price,status,created_at")
-      .in("listing_id", listingIds)
-      .order("price", { ascending: false });
+    const bidsResult = await withTimeout(
+      supabase
+        .from("bids")
+        .select("*")
+        .in("listing_id", listingIds)
+        .order("price", { ascending: false }),
+      "Fetching bids",
+    ) as { data: Bid[] | null };
 
     const grouped: Record<string, Bid[]> = {};
-    (data as Bid[] | null)?.forEach((bid) => {
+    (bidsResult.data ?? []).forEach((bid) => {
       grouped[bid.listing_id] = [...(grouped[bid.listing_id] ?? []), bid];
     });
 
     setBidsMap(grouped);
-    const buyerIds = Array.from(new Set((data as Bid[] | null)?.map((bid) => bid.buyer_id) ?? []));
+    const buyerIds = Array.from(new Set((bidsResult.data ?? []).map((bid) => bid.buyer_id)));
     await fetchProfiles(buyerIds);
   }, [fetchProfiles]);
 
@@ -218,7 +240,7 @@ export default function MarketplacePage() {
 
       let query = supabase
         .from("listings")
-        .select("id,farmer_id,crop,quantity,min_price,district,status,quality,latitude,longitude,created_at")
+        .select("*")
         .in("status", ["open", "active"])
         .order("created_at", { ascending: false });
 
@@ -234,12 +256,12 @@ export default function MarketplacePage() {
         query = query.lte("min_price", Number(filters.maxPrice));
       }
 
-      const { data, error: listingError } = await query;
-      if (listingError) {
-        throw listingError;
+      const listingResult = await withTimeout(query, "Fetching listings") as { data: Listing[] | null; error: { message: string } | null };
+      if (listingResult.error) {
+        throw listingResult.error;
       }
 
-      const rows = (data as Listing[] | null) ?? [];
+      const rows = listingResult.data ?? [];
 
       const filteredNearby = rows.filter((row) => {
         if (!filters.nearbyOnly) {
@@ -247,6 +269,9 @@ export default function MarketplacePage() {
         }
 
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(row.latitude) || !Number.isFinite(row.longitude)) {
+          if (!defaultDistrict.trim()) {
+            return true;
+          }
           return row.district.toLowerCase() === defaultDistrict.toLowerCase();
         }
 
@@ -262,6 +287,7 @@ export default function MarketplacePage() {
       await fetchBidsForListings(filteredNearby.map((row) => row.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load listings");
+      setListings([]);
     } finally {
       setLoading(false);
     }
@@ -335,21 +361,36 @@ export default function MarketplacePage() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("listings").insert({
+    const corePayload = {
       farmer_id: user.id,
       crop: listingForm.crop.trim(),
       quantity,
       min_price: minPrice,
       district: listingForm.district.trim() || defaultDistrict,
-      quality: listingForm.quality.trim() || null,
       status: "open",
+    };
+
+    const extendedPayload = {
+      ...corePayload,
+      quality: listingForm.quality.trim() || null,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
-    });
+    };
+
+    const { error: insertError } = await supabase.from("listings").insert(extendedPayload);
 
     if (insertError) {
-      setError(insertError.message);
-      return;
+      const columnIssue = /column|schema cache|not found|does not exist/i.test(insertError.message || "");
+      if (columnIssue) {
+        const { error: fallbackInsertError } = await supabase.from("listings").insert(corePayload);
+        if (fallbackInsertError) {
+          setError(fallbackInsertError.message);
+          return;
+        }
+      } else {
+        setError(insertError.message);
+        return;
+      }
     }
 
     setListingForm({ crop: "", quantity: "", district: defaultDistrict, minPrice: "", quality: "" });
@@ -368,28 +409,64 @@ export default function MarketplacePage() {
       return;
     }
 
-    const guard = await fetch("/api/marketplace/price-guardian", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        commodity: listing.crop,
-        district: listing.district,
-        state: defaultState,
-        bidPrice: value,
-      }),
-    }).then((response) => response.json() as Promise<PriceGuardianResult>);
+    try {
+      const guard = await fetch("/api/marketplace/price-guardian", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          commodity: listing.crop,
+          district: listing.district,
+          state: defaultState,
+          bidPrice: value,
+        }),
+      }).then((response) => response.json() as Promise<PriceGuardianResult>);
 
-    setGuardianMap((prev) => ({ ...prev, [listing.id]: guard }));
+      if (guard && typeof guard === "object" && "fairPrice" in guard) {
+        setGuardianMap((prev) => ({ ...prev, [listing.id]: guard }));
+      }
+    } catch {
+      // Bid should still be allowed even if guardian service is briefly unavailable.
+    }
 
-    const { error: insertError } = await supabase.from("bids").insert({
+    const basePayload = {
       listing_id: listing.id,
       buyer_id: user.id,
       price: value,
+    };
+    const extendedPayload = {
+      ...basePayload,
       status: "pending",
-    });
+      created_at: new Date().toISOString(),
+    };
 
+    let bidError: string | null = null;
+
+    const { error: insertError } = await supabase.from("bids").insert(extendedPayload);
     if (insertError) {
-      setError(insertError.message);
+      const duplicateIssue = /duplicate key|unique constraint|already exists/i.test(insertError.message || "");
+      const columnIssue = /column|schema cache|not found|does not exist/i.test(insertError.message || "");
+
+      if (duplicateIssue) {
+        const { error: updateExistingError } = await supabase
+          .from("bids")
+          .update({ price: value, status: "pending" })
+          .eq("listing_id", listing.id)
+          .eq("buyer_id", user.id);
+        if (updateExistingError) {
+          bidError = updateExistingError.message;
+        }
+      } else if (columnIssue) {
+        const { error: fallbackInsertError } = await supabase.from("bids").insert(basePayload);
+        if (fallbackInsertError) {
+          bidError = fallbackInsertError.message;
+        }
+      } else {
+        bidError = insertError.message;
+      }
+    }
+
+    if (bidError) {
+      setError(bidError);
       return;
     }
 
@@ -566,7 +643,7 @@ export default function MarketplacePage() {
         {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
         <section className="space-y-4 pb-8">
-          {loading && <p className="text-sm text-slate-500">Loading listings...</p>}
+          {loading && !decoratedListings.length && <p className="text-sm text-slate-500">Loading listings...</p>}
 
           {!loading && !decoratedListings.length && (
             <p className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-600 ring-1 ring-slate-200">No listings found for the selected filters.</p>
