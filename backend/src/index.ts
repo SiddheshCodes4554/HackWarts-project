@@ -4,6 +4,7 @@ import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { analyzeCropRouter } from "./routes/analyzeCrop";
 import { chatRouter } from "./routes/chat";
+import { dashboardRouter } from "./routes/dashboard";
 import { marketRouter } from "./routes/market";
 import { weatherRouter } from "./routes/weather";
 
@@ -25,6 +26,7 @@ app.use(chatRouter);
 app.use(analyzeCropRouter);
 app.use(marketRouter);
 app.use(weatherRouter);
+app.use(dashboardRouter);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled API error", error);
