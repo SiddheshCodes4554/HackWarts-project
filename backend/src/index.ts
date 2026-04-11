@@ -1,9 +1,12 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
+import path from "path";
 import { chatRouter } from "./routes/chat";
 
-dotenv.config();
+dotenv.config({
+  path: path.resolve(__dirname, "..", ".env"),
+});
 
 const app = express();
 const port = Number(process.env.PORT) || 5000;

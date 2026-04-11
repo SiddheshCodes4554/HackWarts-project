@@ -1,5 +1,5 @@
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama3-70b-8192";
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 1;
 
@@ -91,7 +91,7 @@ async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGr
           {
             role: "system",
             content:
-              "You are FarmEase AI. Return only valid JSON with exactly two keys: intent and message.",
+              "You are FarmEase AI, an assistant for farmers and the FarmEase app. Answer agriculture questions, crop guidance, weather planning, market/finance support, and app usage questions. Return only valid JSON with exactly two keys: intent and message. Keep the message concise, practical, and actionable.",
           },
           {
             role: "user",
