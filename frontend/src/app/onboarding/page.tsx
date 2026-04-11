@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
+import { useLocation } from '@/context/LocationContext';
 import { supabase } from '@/lib/supabaseClient';
 import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading: userLoading, refreshProfile } = useUser();
+  const { setLocation } = useLocation();
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
   const [latitude, setLatitude] = useState<number>(0);
@@ -88,14 +90,48 @@ export default function OnboardingPage() {
     }
 
     try {
+      let resolvedLatitude = latitude;
+      let resolvedLongitude = longitude;
+      let resolvedLocationName = locationName.trim();
+
+      if (resolvedLatitude === 0 || resolvedLongitude === 0) {
+        const geocodeResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(resolvedLocationName)}`
+        );
+
+        if (geocodeResponse.ok) {
+          const geocodeData = (await geocodeResponse.json()) as Array<{
+            lat?: string;
+            lon?: string;
+            display_name?: string;
+          }>;
+
+          const first = geocodeData[0];
+          const parsedLat = Number(first?.lat);
+          const parsedLon = Number(first?.lon);
+
+          if (Number.isFinite(parsedLat) && Number.isFinite(parsedLon)) {
+            resolvedLatitude = parsedLat;
+            resolvedLongitude = parsedLon;
+            if (typeof first?.display_name === 'string' && first.display_name.trim()) {
+              resolvedLocationName = first.display_name;
+            }
+          }
+        }
+      }
+
+      if (resolvedLatitude === 0 || resolvedLongitude === 0) {
+        throw new Error('Please use GPS or enter a valid location that can be mapped.');
+      }
+
       const { error: saveError } = await supabase
         .from('profiles')
         .upsert({
           id: user.id,
           name,
-          location_name: locationName,
-          latitude,
-          longitude,
+          location_name: resolvedLocationName,
+          latitude: resolvedLatitude,
+          longitude: resolvedLongitude,
           land_area: parseFloat(landArea),
           primary_crop: primaryCrop,
           language,
@@ -105,6 +141,7 @@ export default function OnboardingPage() {
       if (saveError) throw saveError;
 
       await refreshProfile();
+      setLocation(resolvedLatitude, resolvedLongitude, resolvedLocationName);
 
       router.push('/home');
     } catch (err) {

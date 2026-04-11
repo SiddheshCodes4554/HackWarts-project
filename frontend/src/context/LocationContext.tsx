@@ -6,9 +6,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { reverseGeocode } from "../utils/reverseGeocode";
+import { useUser } from "@/context/UserContext";
 
 type LocationState = {
   latitude: number | null;
@@ -39,6 +41,8 @@ const LocationContext = createContext<LocationContextValue | undefined>(undefine
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [location, setLocationState] = useState<LocationState>(DEFAULT_LOCATION);
   const [isDetecting, setIsDetecting] = useState(false);
+  const { profile } = useUser();
+  const lastSyncedProfileRef = useRef<string>("");
 
   const setLocation = useCallback((lat: number, lon: number, placeName: string) => {
     const nextLocation: LocationState = {
@@ -111,6 +115,37 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
     void detectCurrentLocation();
   }, [detectCurrentLocation]);
+
+  useEffect(() => {
+    if (
+      !profile ||
+      !Number.isFinite(profile.latitude) ||
+      !Number.isFinite(profile.longitude) ||
+      profile.latitude === 0 ||
+      profile.longitude === 0 ||
+      !profile.location_name?.trim()
+    ) {
+      return;
+    }
+
+    const profileKey = `${profile.id}:${profile.updated_at}`;
+    if (lastSyncedProfileRef.current === profileKey) {
+      return;
+    }
+
+    const nextLocation: LocationState = {
+      latitude: profile.latitude,
+      longitude: profile.longitude,
+      placeName: profile.location_name,
+    };
+
+    lastSyncedProfileRef.current = profileKey;
+    setLocationState(nextLocation);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextLocation));
+    }
+  }, [profile]);
 
   const value = useMemo<LocationContextValue>(
     () => ({
