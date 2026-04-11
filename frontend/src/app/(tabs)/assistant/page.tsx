@@ -7,12 +7,10 @@ import {
   CloudRain,
   DollarSign,
   Leaf,
-  Mic,
   SendHorizonal,
   Sparkles,
   Trash2,
   History,
-  ChevronRight,
 } from "lucide-react";
 import { useLocation } from "../../../context/LocationContext";
 import { useUser } from "@/context/UserContext";
@@ -44,7 +42,11 @@ type ChatApiResponse = {
   finance?: SectionData;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  ""
+).replace(/\/$/, "");
 const CHAT_TIMEOUT_MS = 15000;
 
 function toDisplayText(value: unknown): string {

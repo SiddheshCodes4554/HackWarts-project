@@ -21,7 +21,17 @@ type WeatherResponse = {
     advice: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+const DEFAULT_WEATHER: WeatherResponse = {
+    temperature: 30,
+    rainfall: 0,
+    advice: "Weather service is temporarily unavailable. Continue normal irrigation and monitor field moisture.",
+};
+
+const API_BASE_URL = (
+    process.env.NEXT_PUBLIC_API_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    ""
+).replace(/\/$/, "");
 
 export default function WeatherPage() {
     const { latitude, longitude, placeName, isDetecting } = useLocation();
@@ -61,7 +71,9 @@ export default function WeatherPage() {
                     | { error?: string };
 
                 if (!response.ok) {
-                    throw new Error((data as { error?: string }).error ?? "Unable to fetch weather advisory.");
+                    setWeather(DEFAULT_WEATHER);
+                    setError("Live weather is unavailable right now. Showing fallback advisory.");
+                    return;
                 }
 
                 setWeather(data as WeatherResponse);
@@ -70,11 +82,8 @@ export default function WeatherPage() {
                     return;
                 }
 
-                setError(
-                    fetchError instanceof Error
-                        ? fetchError.message
-                        : "Unable to fetch weather advisory at the moment.",
-                );
+                setWeather(DEFAULT_WEATHER);
+                setError("Live weather is unavailable right now. Showing fallback advisory.");
             } finally {
                 setLoading(false);
             }

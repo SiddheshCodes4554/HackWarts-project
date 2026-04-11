@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -40,7 +41,11 @@ type SelectedImage = {
   name: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  ""
+).replace(/\/$/, "");
 const ANALYZE_TIMEOUT_MS = 20000;
 
 function toText(value: unknown): string {
@@ -277,9 +282,11 @@ export default function CropAdvisoryPage() {
 
               {selectedImage ? (
                 <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-white bg-white shadow-sm">
-                  <img
+                  <Image
                     src={selectedImage.previewUrl}
                     alt="Selected crop preview"
+                    width={1200}
+                    height={600}
                     className="h-64 w-full object-cover"
                   />
                   <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-slate-700">
@@ -351,9 +358,11 @@ export default function CropAdvisoryPage() {
               <div className="space-y-4">
                 {selectedImage ? (
                   <article className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
-                    <img
+                    <Image
                       src={selectedImage.previewUrl}
                       alt="Uploaded crop"
+                      width={1200}
+                      height={560}
                       className="h-56 w-full object-cover"
                     />
                   </article>

@@ -78,7 +78,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       const placeName = await reverseGeocode(lat, lon);
 
       setLocation(lat, lon, placeName);
-    } catch (error) {
+    } catch {
       setLocation(DEFAULT_LOCATION.latitude as number, DEFAULT_LOCATION.longitude as number, DEFAULT_LOCATION.placeName);
     } finally {
       setIsDetecting(false);

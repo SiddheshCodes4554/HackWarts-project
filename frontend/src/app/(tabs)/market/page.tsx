@@ -9,7 +9,6 @@ import {
   Loader2,
   MapPin,
   Phone,
-  TrendingDown,
   TrendingUp,
   Wheat,
 } from "lucide-react";
@@ -54,7 +53,11 @@ type AlertSubscription = {
   createdAt: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  ""
+).replace(/\/$/, "");
 const DEFAULT_COMMODITIES = ["Tomato", "Onion", "Wheat", "Rice", "Soybean"];
 
 function formatPrice(value: number): string {

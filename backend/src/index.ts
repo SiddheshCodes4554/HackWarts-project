@@ -24,10 +24,22 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
-// Required runtime configuration for production deployments.
+function normalizeOrigin(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function getOptionalEnv(name: string): string {
+  return process.env[name]?.trim() ?? "";
+}
+
+// Keep only truly required runtime configuration as hard-fail.
 const GROQ_API_KEY = getRequiredEnv("GROQ_API_KEY");
-const SUPABASE_URL = getRequiredEnv("SUPABASE_URL");
-const SUPABASE_ANON_KEY = getRequiredEnv("SUPABASE_ANON_KEY");
+const SUPABASE_URL = getOptionalEnv("SUPABASE_URL");
+const SUPABASE_ANON_KEY = getOptionalEnv("SUPABASE_ANON_KEY");
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.warn("SUPABASE_URL or SUPABASE_ANON_KEY is missing; continuing startup with limited features.");
+}
 
 // Prevent lint/TS unused complaints while still enforcing env validation at boot.
 void GROQ_API_KEY;
@@ -41,11 +53,11 @@ if (!Number.isFinite(port) || port <= 0) {
 
 const allowedOrigins = (process.env.FRONTEND_URL ?? "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
 
 if (isProduction && allowedOrigins.length === 0) {
-  throw new Error("FRONTEND_URL must be set in production for CORS");
+  console.warn("FRONTEND_URL is not set in production; allowing all origins temporarily.");
 }
 
 app.use(
@@ -57,12 +69,13 @@ app.use(
         return;
       }
 
-      if (!isProduction && allowedOrigins.length === 0) {
+      if (allowedOrigins.length === 0) {
         callback(null, true);
         return;
       }
 
-      if (allowedOrigins.includes(origin)) {
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (allowedOrigins.includes(normalizedOrigin)) {
         callback(null, true);
         return;
       }
