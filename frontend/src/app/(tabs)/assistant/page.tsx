@@ -91,11 +91,10 @@ export default function AssistantPage() {
                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-[2rem] px-4 py-3 text-sm leading-6 shadow-sm ${
-                    message.role === "user"
+                  className={`max-w-[85%] rounded-[2rem] px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user"
                       ? "bg-lime-700 text-white"
                       : "border border-lime-100 bg-white text-slate-800"
-                  }`}
+                    }`}
                 >
                   {message.content}
                 </div>

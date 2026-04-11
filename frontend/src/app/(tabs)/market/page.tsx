@@ -76,11 +76,10 @@ export default function MarketPage() {
                   {item.distance}
                 </span>
                 <span
-                  className={`inline-flex items-center rounded-2xl px-3 py-2 text-sm font-semibold ${
-                    item.tag === "Best Price"
+                  className={`inline-flex items-center rounded-2xl px-3 py-2 text-sm font-semibold ${item.tag === "Best Price"
                       ? "bg-emerald-50 text-emerald-700"
                       : "bg-lime-50 text-lime-700"
-                  }`}
+                    }`}
                 >
                   {item.tag}
                 </span>
