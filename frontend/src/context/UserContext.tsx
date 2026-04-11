@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
+import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
 export interface UserProfile {
@@ -83,7 +83,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
 
     // Listen to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: string, session: any) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       if (session?.user) {
         setUser(session.user);
         fetchProfile(session.user.id);

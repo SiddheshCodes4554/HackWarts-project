@@ -27,7 +27,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
     const state = data.address?.state ?? "India";
 
     return `${city}, ${state}`;
-  } catch (error) {
+  } catch {
     return "Nagpur, Maharashtra";
   }
 }

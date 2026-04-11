@@ -1,47 +1,24 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
-let supabaseClient: any = null;
+let supabaseClient: SupabaseClient | null = null;
 
 // Lazy initialize Supabase client to avoid build-time errors
-export function getSupabaseClient() {
+export function getSupabaseClient(): SupabaseClient {
   if (!supabaseClient) {
-    try {
-      supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    } catch (err) {
-      console.error('Failed to initialize Supabase:', err);
-      // Return a mock client to avoid crashes
-      return {
-        auth: {
-          getSession: async () => ({ data: { session: null } }),
-          signInWithPassword: async () => ({ error: new Error('Supabase not configured') }),
-          signUp: async () => ({ error: new Error('Supabase not configured') }),
-          signOut: async () => ({ error: new Error('Supabase not configured') }),
-          onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-        },
-        from: () => ({
-          select: () => ({
-            eq: () => ({
-              single: async () => ({ error: new Error('Database not available') }),
-            }),
-          }),
-          insert: async () => ({ error: new Error('Database not available') }),
-          update: async () => ({ error: new Error('Database not available') }),
-        }),
-      };
-    }
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
   }
   return supabaseClient;
 }
 
 // For backward compatibility, create a default export
-export const supabase = new Proxy({}, {
-  get(target, prop) {
-    return getSupabaseClient()[prop as string];
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    return getSupabaseClient()[prop as keyof SupabaseClient];
   },
-}) as any;
+}) as SupabaseClient;
 
 export function isSupabaseConfigured(): boolean {
   return (
@@ -52,7 +29,7 @@ export function isSupabaseConfigured(): boolean {
   );
 }
 
-export type Database = any;
+export type Database = unknown;
 
 
 

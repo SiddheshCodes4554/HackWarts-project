@@ -136,7 +136,7 @@ export async function getChatStats(userId: string) {
     }
 
     const byType: Record<string, number> = {};
-    (data || []).forEach((item: ChatMessage) => {
+    (data || []).forEach((item: { agent_type: string | null }) => {
       const type = item.agent_type || 'general';
       byType[type] = (byType[type] || 0) + 1;
     });
