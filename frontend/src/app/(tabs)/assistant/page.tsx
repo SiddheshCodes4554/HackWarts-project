@@ -85,13 +85,13 @@ function parseStructuredCards(data: ChatApiResponse): Partial<StructuredCards> {
   };
 }
 
-function hasStructuredCards(structured: Partial<StructuredCards> | undefined): boolean {
+function hasStructuredCards(structured?: Partial<StructuredCards>): boolean {
   if (!structured) {
     return false;
   }
 
-  return Object.values(structured).some(
-    (section) => isSectionData(section) && hasRenderableFields(section),
+  return Object.values(structured).some((section) =>
+    isSectionData(section) && hasRenderableFields(section),
   );
 }
 
