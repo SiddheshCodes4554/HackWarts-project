@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { LocationModal } from "../../../components/LocationModal";
 import { useLocation } from "../../../context/LocationContext";
+import { useUser } from "@/context/UserContext";
 
 type WeatherResponse = {
   temperature: number;
@@ -51,13 +52,19 @@ const features = [
 
 export default function HomePage() {
   const { latitude, longitude, placeName, isDetecting } = useLocation();
+  const { profile } = useUser();
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState("");
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
+  // Use user's stored location if available
+  const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
+  const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
+  const effectivePlaceName = profile?.location_name || placeName;
+
   useEffect(() => {
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    if (!Number.isFinite(effectiveLatitude) || !Number.isFinite(effectiveLongitude)) {
       return;
     }
 
@@ -69,7 +76,7 @@ export default function HomePage() {
 
       try {
         const response = await fetch(
-          `${API_BASE_URL}/weather?latitude=${latitude}&longitude=${longitude}`,
+          `${API_BASE_URL}/weather?latitude=${effectiveLatitude}&longitude=${effectiveLongitude}`,
           { signal: controller.signal },
         );
         const data = (await response.json().catch(() => ({}))) as
@@ -97,7 +104,7 @@ export default function HomePage() {
     return () => {
       controller.abort();
     };
-  }, [latitude, longitude]);
+  }, [effectiveLatitude, effectiveLongitude]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
@@ -109,17 +116,29 @@ export default function HomePage() {
                 Namaste 👋
               </p>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                Welcome back, farmer.
+                Welcome back, {profile?.name || "farmer"}!
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Your daily dashboard for weather, market pricing, crop support, and finance insights.
+                Your personalized dashboard for {profile?.primary_crop || "your crop"} farming — weather, market pricing, crop support, and finance insights.
               </p>
+              {profile && (
+                <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-xs font-semibold uppercase text-lime-700">Your Crop</span>
+                    <p className="font-semibold text-slate-900">{profile.primary_crop || "Not set"}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold uppercase text-lime-700">Land Area</span>
+                    <p className="font-semibold text-slate-900">{profile.land_area} acres</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="rounded-[1.75rem] bg-lime-50 px-4 py-3 text-sm font-semibold text-lime-900 shadow-sm ring-1 ring-lime-100">
-              <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Location</span>
+              <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Your Location</span>
               <span className="mt-1 inline-flex items-center gap-2 text-lg">
                 <MapPin className="h-4 w-4" />
-                {isDetecting ? "Detecting..." : placeName}
+                {isDetecting ? "Detecting..." : effectivePlaceName}
               </span>
               <button
                 type="button"

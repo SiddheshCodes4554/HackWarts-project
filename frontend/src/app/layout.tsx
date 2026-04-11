@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { LocationProvider } from "../context/LocationContext";
+import { UserProvider } from "../context/UserContext";
+import RootLayoutClient from "./layout-client";
 
 export const metadata: Metadata = {
   title: "FarmEase 🌾 - Your AI Farming Assistant",
@@ -15,7 +17,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <LocationProvider>{children}</LocationProvider>
+        <UserProvider>
+          <LocationProvider>
+            <RootLayoutClient>{children}</RootLayoutClient>
+          </LocationProvider>
+        </UserProvider>
       </body>
     </html>
   );
