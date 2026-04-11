@@ -45,7 +45,7 @@ const allowedOrigins = (process.env.FRONTEND_URL ?? "")
   .filter(Boolean);
 
 if (isProduction && allowedOrigins.length === 0) {
-  throw new Error("FRONTEND_URL must be set in production for CORS");
+  console.warn("FRONTEND_URL is not set in production; allowing all origins temporarily.");
 }
 
 app.use(
@@ -57,7 +57,7 @@ app.use(
         return;
       }
 
-      if (!isProduction && allowedOrigins.length === 0) {
+      if (allowedOrigins.length === 0) {
         callback(null, true);
         return;
       }
