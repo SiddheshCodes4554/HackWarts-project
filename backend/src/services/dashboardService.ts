@@ -2,7 +2,7 @@ import { cropAgent } from "../agents/cropAgent";
 import { getFinancialAdvice } from "../agents/financeAgent";
 import { getMarketData } from "../agents/marketAgent";
 import { weatherAgent } from "../agents/weatherAgent";
-import { DashboardData, DashboardLocation } from "../utils/types";
+import { DashboardData, DashboardLocation, FinancialUserProfile } from "../utils/types";
 import { getSoilProfile } from "./soilService";
 
 function toWeatherFromMetadata(metadata: Record<string, string | number | boolean> | undefined) {
@@ -38,11 +38,17 @@ export async function getDashboardData(location: DashboardLocation): Promise<Das
     longitude: location.longitude,
     timestamp,
   };
+  const financeProfile: FinancialUserProfile = {
+    landOwned: false,
+    cropType: "",
+    location: location.placeName,
+    incomeLevel: "medium",
+  };
 
   const [weatherResult, soilResult, financeResult] = await Promise.allSettled([
     weatherAgent(context),
     getSoilProfile(location.latitude, location.longitude),
-    getFinancialAdvice(location.placeName),
+    getFinancialAdvice(financeProfile),
   ]);
 
   if (weatherResult.status === "rejected") {
