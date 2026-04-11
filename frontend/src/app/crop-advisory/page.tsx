@@ -46,7 +46,9 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   ""
 ).replace(/\/$/, "");
-const ANALYZE_TIMEOUT_MS = 20000;
+const ANALYZE_TIMEOUT_MS = 30000;
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1280;
 
 function toText(value: unknown): string {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -107,6 +109,41 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to decode image"));
+    image.src = dataUrl;
+  });
+}
+
+async function optimizeImageForUpload(file: File): Promise<string> {
+  const rawDataUrl = await readFileAsDataUrl(file);
+
+  if (file.size <= MAX_UPLOAD_BYTES) {
+    return rawDataUrl;
+  }
+
+  const image = await loadImage(rawDataUrl);
+  const ratio = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height));
+  const targetWidth = Math.max(1, Math.round(image.width * ratio));
+  const targetHeight = Math.max(1, Math.round(image.height * ratio));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return rawDataUrl;
+  }
+
+  context.drawImage(image, 0, 0, targetWidth, targetHeight);
+  const compressed = canvas.toDataURL("image/jpeg", 0.78);
+  return compressed || rawDataUrl;
+}
+
 export default function CropAdvisoryPage() {
   const { latitude, longitude, placeName } = useLocation();
     const router = useRouter();
@@ -142,13 +179,18 @@ export default function CropAdvisoryPage() {
       return;
     }
 
-    const dataUrl = await readFileAsDataUrl(file);
-    setSelectedImage({
-      previewUrl: dataUrl,
-      dataUrl,
-      name: file.name,
-    });
-    setError("");
+    try {
+      const dataUrl = await optimizeImageForUpload(file);
+      setSelectedImage({
+        previewUrl: dataUrl,
+        dataUrl,
+        name: file.name,
+      });
+      setError("");
+    } catch {
+      setError("Unable to process this image. Try another photo with better lighting.");
+    }
+
     event.target.value = "";
   };
 
@@ -182,9 +224,17 @@ export default function CropAdvisoryPage() {
         signal: controller.signal,
       });
 
-      const data = (await response.json().catch(() => ({}))) as CropAdvisoryResponse;
+      const data = (await response.json().catch(() => ({}))) as CropAdvisoryResponse & { error?: string };
 
       if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error("Image is too large. Please upload a smaller or compressed image.");
+        }
+
+        if (response.status === 429) {
+          throw new Error("Too many requests. Please wait a moment and retry.");
+        }
+
         throw new Error(data.error ?? "Could not detect clearly, try again");
       }
 
@@ -193,8 +243,10 @@ export default function CropAdvisoryPage() {
     } catch (submissionError) {
       const message =
         submissionError instanceof DOMException && submissionError.name === "AbortError"
-          ? "Analyzing crop..."
-          : "Could not detect clearly, try again";
+          ? "Request timed out. Try a clearer image or add a short symptom note."
+          : submissionError instanceof Error
+            ? submissionError.message
+            : "Could not detect clearly, try again";
       setError(message);
     } finally {
       window.clearTimeout(timeoutId);
