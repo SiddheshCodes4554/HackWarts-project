@@ -1,6 +1,8 @@
 import { SoilProfile } from "../utils/types";
 
 const SOILGRIDS_API_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const SOIL_MODEL = process.env.GROQ_SOIL_MODEL ?? "llama-3.3-70b-versatile";
 const SOIL_TIMEOUT_MS = 9000;
 
 type SoilGridDepth = {
@@ -21,44 +23,41 @@ type SoilGridPayload = {
   };
 };
 
-function roundValue(value: number | null, digits = 2): number | null {
-  if (!Number.isFinite(value ?? Number.NaN)) {
-    return null;
+type GroqPayload = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+
+function roundValue(value: number, digits = 2): number {
+  if (!Number.isFinite(value)) {
+    throw new Error("Cannot round non-finite soil value");
   }
 
   const factor = 10 ** digits;
-  return Math.round((value as number) * factor) / factor;
+  return Math.round(value * factor) / factor;
 }
 
-function extractLayerMean(layers: SoilGridLayer[], layerName: string): number | null {
-  const layer = layers.find((entry) => entry.name?.toLowerCase() === layerName.toLowerCase());
+function extractLayerMean(layers: SoilGridLayer[], layerNames: string[]): number {
+  const layer = layers.find((entry) =>
+    layerNames.some((name) => entry.name?.toLowerCase() === name.toLowerCase()),
+  );
   const depth = layer?.depths?.find((entry) => entry.label === "0-5cm") ?? layer?.depths?.[0];
   const meanValue = depth?.values?.mean;
 
-  return Number.isFinite(meanValue) ? (meanValue as number) : null;
+  if (!Number.isFinite(meanValue)) {
+    throw new Error(`Missing soil layer data for ${layerNames.join("/")}`);
+  }
+
+  return meanValue as number;
 }
 
-function inferTexture(clay: number | null, sand: number | null, silt: number | null): string {
-  if (clay !== null && clay >= 40) {
-    return "clayey";
-  }
-
-  if (sand !== null && sand >= 60) {
-    return "sandy";
-  }
-
-  if (silt !== null && silt >= 40) {
-    return "silty";
-  }
-
-  return "loamy";
-}
-
-function inferAcidity(ph: number | null): string {
-  if (ph === null) {
-    return "Unknown";
-  }
-
+function inferAcidity(ph: number): string {
   if (ph < 6) {
     return "Acidic";
   }
@@ -70,14 +69,96 @@ function inferAcidity(ph: number | null): string {
   return "Neutral";
 }
 
-function emptySoilProfile(): SoilProfile {
-  return {
-    ph: null,
-    nitrogen: null,
-    organicCarbon: null,
-    soilType: "Unknown soil type",
-    source: "soilgrids-unavailable",
-  };
+function parseRecommendation(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("Empty recommendation response");
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as Partial<{ recommendation: string }>;
+    if (typeof parsed.recommendation === "string" && parsed.recommendation.trim()) {
+      return parsed.recommendation.trim();
+    }
+  } catch {
+    const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      try {
+        const parsed = JSON.parse(objectMatch[0]) as Partial<{ recommendation: string }>;
+        if (typeof parsed.recommendation === "string" && parsed.recommendation.trim()) {
+          return parsed.recommendation.trim();
+        }
+      } catch {
+        // Ignore and return plain-text response below.
+      }
+    }
+  }
+
+  return trimmed;
+}
+
+async function generateSoilRecommendation(soilData: {
+  ph: number;
+  nitrogen: number;
+  organicCarbon: number;
+  soilType: string;
+}): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is required for soil recommendation");
+  }
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), SOIL_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: SOIL_MODEL,
+        temperature: 0.2,
+        max_tokens: 300,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an agricultural expert. Return valid JSON with one key: recommendation.",
+          },
+          {
+            role: "user",
+            content: [
+              "Given soil data:",
+              JSON.stringify(soilData),
+              "Provide:",
+              "- soil type",
+              "- suitability for crops",
+              "- improvement suggestions",
+            ].join("\n"),
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as GroqPayload;
+    if (!response.ok) {
+      throw new Error(payload.error?.message ?? `Groq soil API failed: HTTP ${response.status}`);
+    }
+
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("Groq soil response is empty");
+    }
+
+    return parseRecommendation(content);
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }
 
 export async function getSoilProfile(latitude: number, longitude: number): Promise<SoilProfile> {
@@ -88,7 +169,7 @@ export async function getSoilProfile(latitude: number, longitude: number): Promi
     const params = new URLSearchParams();
     params.set("lon", String(longitude));
     params.set("lat", String(latitude));
-    ["phh2o", "nitrogen", "soc", "clay", "sand", "silt"].forEach((property) => {
+    ["phh2o", "nitrogen", "organic_carbon"].forEach((property) => {
       params.append("property", property);
     });
     params.set("depth", "0-5cm");
@@ -104,27 +185,25 @@ export async function getSoilProfile(latitude: number, longitude: number): Promi
     const payload = (await response.json().catch(() => ({}))) as SoilGridPayload;
     const layers = payload.properties?.layers ?? [];
 
-    const ph = roundValue(extractLayerMean(layers, "phh2o"), 2);
-    const nitrogen = roundValue(extractLayerMean(layers, "nitrogen"), 3);
-    const organicCarbon = roundValue(extractLayerMean(layers, "soc"), 2);
-    const clay = extractLayerMean(layers, "clay");
-    const sand = extractLayerMean(layers, "sand");
-    const silt = extractLayerMean(layers, "silt");
-
-    const acidity = inferAcidity(ph);
-    const texture = inferTexture(clay, sand, silt);
-    const soilType = acidity === "Unknown" ? `${texture} soil` : `${acidity} ${texture} soil`;
+    const ph = roundValue(extractLayerMean(layers, ["phh2o"]), 2);
+    const nitrogen = roundValue(extractLayerMean(layers, ["nitrogen"]), 3);
+    const organicCarbon = roundValue(extractLayerMean(layers, ["organic_carbon", "soc"]), 2);
+    const soilType = inferAcidity(ph);
+    const recommendation = await generateSoilRecommendation({
+      ph,
+      nitrogen,
+      organicCarbon,
+      soilType,
+    });
 
     return {
       ph,
       nitrogen,
       organicCarbon,
       soilType,
+      recommendation,
       source: "soilgrids",
     };
-  } catch (error) {
-    console.error("Soil profile fallback", error);
-    return emptySoilProfile();
   } finally {
     clearTimeout(timeoutHandle);
   }

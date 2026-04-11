@@ -7,6 +7,7 @@ type OpenMeteoCurrent = {
   temperature_2m?: number;
   precipitation?: number;
   relative_humidity_2m?: number;
+  wind_speed_10m?: number;
 };
 
 type OpenMeteoResponse = {
@@ -37,16 +38,6 @@ function buildAdvice(temperature: number, rainfall: number, humidity: number): s
   return "Weather is moderate. Continue planned irrigation and monitor crop moisture during the day.";
 }
 
-function fallbackWeatherAdvisory(): WeatherAdvisory {
-  return {
-    temperature: 28,
-    rainfall: 0,
-    humidity: 60,
-    advice:
-      "Live weather feed is temporarily unavailable. Use local field conditions before making irrigation decisions.",
-  };
-}
-
 export async function getWeatherAdvisory(
   latitude: number,
   longitude: number,
@@ -58,7 +49,7 @@ export async function getWeatherAdvisory(
     const params = new URLSearchParams({
       latitude: String(latitude),
       longitude: String(longitude),
-      current: "temperature_2m,precipitation,relative_humidity_2m",
+      current: "temperature_2m,precipitation,relative_humidity_2m,wind_speed_10m",
       timezone: "auto",
     });
 
@@ -77,19 +68,22 @@ export async function getWeatherAdvisory(
       throw new Error("Open-Meteo response missing current weather data.");
     }
 
-    const temperature = Number(current.temperature_2m ?? 28);
-    const rainfall = Number(current.precipitation ?? 0);
-    const humidity = Number(current.relative_humidity_2m ?? 60);
+    const temperature = Number(current.temperature_2m);
+    const rainfall = Number(current.precipitation);
+    const humidity = Number(current.relative_humidity_2m);
+    const windSpeed = Number(current.wind_speed_10m);
+
+    if (![temperature, rainfall, humidity, windSpeed].every(Number.isFinite)) {
+      throw new Error("Open-Meteo response contained invalid weather values.");
+    }
 
     return {
       temperature: roundToOneDecimal(temperature),
       rainfall: roundToOneDecimal(rainfall),
       humidity: roundToOneDecimal(humidity),
+      windSpeed: roundToOneDecimal(windSpeed),
       advice: buildAdvice(temperature, rainfall, humidity),
     };
-  } catch (error) {
-    console.error("Weather advisory fallback", error);
-    return fallbackWeatherAdvisory();
   } finally {
     clearTimeout(timeoutHandle);
   }
@@ -110,6 +104,8 @@ export async function weatherAgent(context: AgentContext): Promise<AgentResult> 
       temperature: advisory.temperature,
       rainfall: advisory.rainfall,
       humidity: advisory.humidity,
+      windSpeed: advisory.windSpeed,
+      advice: advisory.advice,
       latitude: roundToOneDecimal(latitude),
       longitude: roundToOneDecimal(longitude),
     },

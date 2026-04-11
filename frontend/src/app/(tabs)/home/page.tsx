@@ -1,59 +1,50 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, MapPin, Sprout } from "lucide-react";
 import {
-  ArrowRight,
-  BarChart3,
-  CloudRain,
-  DollarSign,
-  Leaf,
-  Loader2,
-  MapPin,
-} from "lucide-react";
-import { LocationModal } from "../../../components/LocationModal";
-import { useLocation } from "../../../context/LocationContext";
-
-type WeatherResponse = {
-  temperature: number;
-  rainfall: number;
-  advice: string;
-};
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { LocationModal } from "@/components/LocationModal";
+import { SoilCard } from "@/components/dashboard/SoilCard";
+import { WeatherCard } from "@/components/dashboard/WeatherCard";
+import { useLocation } from "@/context/LocationContext";
+import { DashboardPayload } from "@/utils/dashboardTypes";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 
-const features = [
-  {
-    title: "Crop Help",
-    description: "Tailored guidance for your field and crop cycle.",
-    href: "/crop-advisory",
-    icon: Leaf,
-  },
-  {
-    title: "Market Prices",
-    description: "Check latest mandi rates across Nagpur.",
-    href: "/market",
-    icon: BarChart3,
-  },
-  {
-    title: "Finance",
-    description: "Plan loans, subsidies, and cash flow with confidence.",
-    href: "/finance",
-    icon: DollarSign,
-  },
-  {
-    title: "Weather",
-    description: "Get hourly weather alerts for irrigation planning.",
-    href: "/weather",
-    icon: CloudRain,
-  },
-];
+function rupee(value: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      <div className="h-20 rounded-3xl bg-slate-200" />
+      <div className="h-56 rounded-3xl bg-slate-200" />
+      <div className="h-56 rounded-3xl bg-slate-200" />
+      <div className="h-72 rounded-3xl bg-slate-200" />
+      <div className="h-64 rounded-3xl bg-slate-200" />
+    </div>
+  );
+}
 
 export default function HomePage() {
   const { latitude, longitude, placeName, isDetecting } = useLocation();
-  const [weather, setWeather] = useState<WeatherResponse | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [weatherError, setWeatherError] = useState("");
+  const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   useEffect(() => {
@@ -63,204 +54,178 @@ export default function HomePage() {
 
     const controller = new AbortController();
 
-    const fetchWeather = async () => {
-      setWeatherLoading(true);
-      setWeatherError("");
+    const fetchDashboard = async () => {
+      setLoading(true);
+      setError("");
 
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/weather?latitude=${latitude}&longitude=${longitude}`,
-          { signal: controller.signal },
-        );
-        const data = (await response.json().catch(() => ({}))) as
-          | WeatherResponse
-          | { error?: string };
+        const params = new URLSearchParams({
+          latitude: String(latitude),
+          longitude: String(longitude),
+          placeName,
+        });
+
+        const response = await fetch(`${API_BASE_URL}/dashboard?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        const data = (await response.json().catch(() => ({}))) as DashboardPayload | { error?: string };
 
         if (!response.ok) {
-          throw new Error((data as { error?: string }).error ?? "Unable to fetch weather");
+          throw new Error((data as { error?: string }).error ?? "Unable to load dashboard data");
         }
 
-        setWeather(data as WeatherResponse);
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        setDashboard(data as DashboardPayload);
+      } catch (fetchError) {
+        if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
           return;
         }
 
-        setWeatherError("Unable to load live weather right now.");
+        setError("Live dashboard is temporarily unavailable. Please retry in a moment.");
       } finally {
-        setWeatherLoading(false);
+        setLoading(false);
       }
     };
 
-    void fetchWeather();
+    void fetchDashboard();
 
     return () => {
       controller.abort();
     };
-  }, [latitude, longitude]);
+  }, [latitude, longitude, placeName]);
+
+  const marketChartData = useMemo(
+    () =>
+      (dashboard?.market.markets ?? []).map((market) => ({
+        mandi: market.mandi,
+        Modal: market.modalPrice,
+        "Net Profit": market.netProfit,
+      })),
+    [dashboard],
+  );
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8">
-        <section className="rounded-[2rem] border border-lime-200/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] backdrop-blur-sm sm:p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#f1f9ec_0%,_#f7fbf3_40%,_#ecf3ea_100%)] px-4 py-5 sm:px-6">
+      <div className="mx-auto max-w-5xl space-y-4 pb-8">
+        <section className="rounded-3xl border border-lime-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-lime-700">
-                Namaste 👋
-              </p>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                Welcome back, farmer.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Your daily dashboard for weather, market pricing, crop support, and finance insights.
-              </p>
-            </div>
-            <div className="rounded-[1.75rem] bg-lime-50 px-4 py-3 text-sm font-semibold text-lime-900 shadow-sm ring-1 ring-lime-100">
-              <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Location</span>
-              <span className="mt-1 inline-flex items-center gap-2 text-lg">
+              <p className="text-xs uppercase tracking-[0.2em] text-lime-700">Agricultural Intelligence</p>
+              <h1 className="mt-2 text-2xl font-bold text-slate-900">FarmEase Real-Time Dashboard</h1>
+              <p className="mt-2 inline-flex items-center gap-1 text-sm text-slate-600">
                 <MapPin className="h-4 w-4" />
-                {isDetecting ? "Detecting..." : placeName}
-              </span>
-              <button
-                type="button"
-                onClick={() => setLocationModalOpen(true)}
-                className="mt-3 inline-flex rounded-full border border-lime-200 bg-white px-3 py-1 text-xs font-semibold text-lime-800 transition hover:bg-lime-100"
-              >
-                Change Location
-              </button>
+                {isDetecting ? "Detecting location..." : placeName}
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setLocationModalOpen(true)}
+              className="rounded-full border border-lime-200 bg-lime-50 px-3 py-2 text-xs font-semibold text-lime-900"
+            >
+              Change
+            </button>
           </div>
+          <p className="mt-3 text-sm text-slate-700">
+            {dashboard?.weather.advice ?? "Fetching weather insight and farm intelligence..."}
+          </p>
         </section>
 
-        <section className="rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-[0_16px_40px_rgba(20,74,116,0.08)] sm:p-8">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="inline-flex items-center gap-2 text-xl font-semibold text-slate-900">
-              <CloudRain className="h-5 w-5 text-sky-700" />
-              Weather Card
-            </h2>
-            {(weatherLoading || isDetecting) && (
-              <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Updating
-              </span>
-            )}
-          </div>
+        {loading && <DashboardSkeleton />}
 
-          {weatherError ? (
-            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {weatherError}
+        {!loading && error && (
+          <section className="rounded-3xl border border-rose-200 bg-rose-50 p-5 text-rose-800">
+            <p className="inline-flex items-center gap-2 text-sm font-medium">
+              <AlertCircle className="h-4 w-4" />
+              {error}
             </p>
-          ) : (
-            <>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <article className="rounded-[1.5rem] border border-amber-100 bg-amber-50 p-5">
-                  <p className="text-sm font-semibold uppercase tracking-[0.15em] text-amber-700">
-                    Temperature
-                  </p>
-                  <p className="mt-3 text-3xl font-semibold text-slate-900">
-                    {weather ? `${weather.temperature}°C` : "--"}
-                  </p>
-                </article>
-                <article className="rounded-[1.5rem] border border-sky-100 bg-sky-50 p-5">
-                  <p className="text-sm font-semibold uppercase tracking-[0.15em] text-sky-700">
-                    Rainfall
-                  </p>
-                  <p className="mt-3 text-3xl font-semibold text-slate-900">
-                    {weather ? `${weather.rainfall} mm` : "--"}
-                  </p>
-                </article>
+          </section>
+        )}
+
+        {!loading && dashboard && (
+          <div className="space-y-4">
+            <WeatherCard weather={dashboard.weather} />
+
+            <SoilCard soil={dashboard.soil} />
+
+            <section className="rounded-3xl border border-lime-200 bg-white p-5 shadow-sm">
+              <header className="flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-slate-900">Crop Advice</h2>
+                <Sprout className="h-5 w-5 text-lime-700" />
+              </header>
+              <p className="mt-2 rounded-2xl bg-lime-50 p-3 text-sm font-medium text-lime-900">
+                {dashboard.crops.summary}
+              </p>
+              <div className="mt-3 space-y-3">
+                {dashboard.crops.recommendations.map((crop) => (
+                  <article key={`${crop.crop}-${crop.season}`} className="rounded-2xl border border-lime-100 p-3">
+                    <p className="text-lg font-semibold text-slate-900">{crop.crop}</p>
+                    <p className="text-xs uppercase tracking-wide text-lime-700">Season: {crop.season}</p>
+                    <p className="mt-1 text-sm text-slate-700">{crop.reasoning}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-sky-200 bg-white p-5 shadow-sm">
+              <header className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-slate-900">Market Intelligence</h2>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    dashboard.market.signal === "SELL"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {dashboard.market.signal}
+                </span>
+              </header>
+
+              <p className="mt-3 text-sm font-medium text-sky-900">BEST MARKET: {dashboard.market.bestMarket}</p>
+              <p className="mt-1 text-sm text-slate-700">{dashboard.market.recommendation}</p>
+
+              <div className="mt-4 h-64 rounded-2xl border border-slate-100 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={marketChartData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                    <XAxis dataKey="mandi" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="Modal" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="Net Profit" fill="#16a34a" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
 
-              <article className="mt-4 rounded-[1.5rem] border border-emerald-100 bg-emerald-50 p-5">
-                <p className="text-sm font-semibold uppercase tracking-[0.15em] text-emerald-700">
-                  Advice
-                </p>
-                <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-base">
-                  {weather
-                    ? weather.advice
-                    : "Weather advice will appear automatically based on your selected location."}
-                </p>
-              </article>
-            </>
-          )}
-        </section>
-
-        <section className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
-          <article className="rounded-[2rem] border border-lime-200/80 bg-white/95 p-6 shadow-[0_24px_70px_rgba(40,72,18,0.08)] sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <span className="rounded-3xl bg-lime-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-lime-700">
-                Today&apos;s Recommendation
-              </span>
-              <span className="inline-flex items-center rounded-3xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
-                🌧️ Weather alert
-              </span>
-            </div>
-            <h2 className="mt-6 text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
-              Rain expected — delay irrigation and monitor soil moisture.
-            </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-              Fresh data from local mandi weather stations recommends holding off on irrigation
-              today to protect the young crop and improve nutrient uptake.
-            </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-lime-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-900/15">
-              <ArrowRight className="h-4 w-4" />
-              Review weather details
-            </div>
-          </article>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {features.map((feature) => {
-              const Icon = feature.icon;
-              return (
-                <Link
-                  key={feature.title}
-                  href={feature.href}
-                  className="group flex flex-col justify-between rounded-[1.75rem] border border-lime-100 bg-white p-5 shadow-[0_18px_50px_rgba(48,83,23,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(48,83,23,0.14)]"
-                >
-                  <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-lime-50 text-lime-800 transition group-hover:bg-lime-100">
-                    <Icon className="h-6 w-6" />
+              <div className="mt-4 grid gap-2">
+                {dashboard.market.markets.map((market) => (
+                  <div key={market.mandi} className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">
+                    <p className="font-semibold text-slate-900">{market.mandi}</p>
+                    <p>Price: {rupee(market.modalPrice)} | Net: {rupee(market.netProfit)}</p>
+                    <p>
+                      Transport: {rupee(market.transportCost)} | Distance: {market.distanceKm} km
+                    </p>
                   </div>
-                  <div className="mt-5">
-                    <h3 className="text-lg font-semibold text-slate-900">{feature.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{feature.description}</p>
-                  </div>
-                  <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-lime-700">
-                    Open <ArrowRight className="h-4 w-4" />
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
+                ))}
+              </div>
+            </section>
 
-        <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-[0_16px_40px_rgba(48,83,23,0.07)] sm:p-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Quick Insights</p>
-              <h2 className="mt-3 text-2xl font-semibold text-slate-900">Fast farm signals for today</h2>
-            </div>
-            <span className="rounded-full bg-lime-50 px-3 py-2 text-sm font-semibold text-lime-800 ring-1 ring-lime-100">
-              Updated now
-            </span>
-          </div>
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-base font-semibold text-slate-900">Financial Insights</h2>
+              <p className="mt-2 text-sm text-slate-700">{dashboard.finance.advice}</p>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <article className="rounded-[1.75rem] bg-lime-50 p-6 shadow-sm">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">
-                Top mandi price today
-              </p>
-              <p className="mt-4 text-3xl font-semibold text-slate-900">₹24,200 / quintal</p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Tomato rate in Nagpur mandi</p>
-            </article>
-            <article className="rounded-[1.75rem] bg-slate-50 p-6 shadow-sm">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Best crop suggestion
-              </p>
-              <p className="mt-4 text-3xl font-semibold text-slate-900">Soybean</p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Recommended for the current monsoon window.</p>
-            </article>
+              <div className="mt-3 space-y-2">
+                {dashboard.finance.schemes.map((scheme) => (
+                  <article key={scheme.name} className="rounded-2xl border border-slate-100 p-3">
+                    <p className="font-semibold text-slate-900">{scheme.name}</p>
+                    <p className="text-sm text-slate-700">{scheme.benefit}</p>
+                    <p className="text-sm font-semibold text-emerald-700">{rupee(scheme.amountINR)}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
-        </section>
+        )}
 
         <LocationModal isOpen={locationModalOpen} onClose={() => setLocationModalOpen(false)} />
       </div>
