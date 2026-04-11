@@ -90,6 +90,10 @@ export default function MarketPage() {
   const { latitude, longitude, placeName } = useLocation();
     const router = useRouter();
     const { user, profile } = useUser();
+
+  const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
+  const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
+  const effectivePlaceName = profile?.location_name || placeName;
   
     // Protect route
     useEffect(() => {
@@ -117,15 +121,15 @@ export default function MarketPage() {
       try {
         const params = new URLSearchParams({
           message: `${commodity} mandi price intelligence`,
-          locale: placeName,
+          locale: effectivePlaceName,
         });
 
-        if (Number.isFinite(latitude)) {
-          params.set("latitude", String(latitude));
+        if (Number.isFinite(effectiveLatitude)) {
+          params.set("latitude", String(effectiveLatitude));
         }
 
-        if (Number.isFinite(longitude)) {
-          params.set("longitude", String(longitude));
+        if (Number.isFinite(effectiveLongitude)) {
+          params.set("longitude", String(effectiveLongitude));
         }
 
         const response = await fetch(`${API_BASE_URL}/market-intelligence?${params.toString()}`, {
@@ -152,7 +156,7 @@ export default function MarketPage() {
     void load();
 
     return () => controller.abort();
-  }, [commodity, latitude, longitude, placeName]);
+  }, [commodity, effectiveLatitude, effectiveLongitude, effectivePlaceName]);
 
   const chart = useMemo(() => buildBars(marketData?.chart ?? []), [marketData]);
   const bestMarket = marketData?.best_market ?? null;
@@ -212,7 +216,7 @@ export default function MarketPage() {
               <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Location</span>
               <span className="mt-1 inline-flex items-center gap-2 text-lg">
                 <MapPin className="h-4 w-4" />
-                {placeName}
+                {effectivePlaceName}
               </span>
             </div>
           </div>

@@ -111,6 +111,10 @@ export default function CropAdvisoryPage() {
   const { latitude, longitude, placeName } = useLocation();
     const router = useRouter();
     const { user, profile } = useUser();
+
+  const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
+  const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
+  const effectivePlaceName = profile?.location_name || placeName;
   
     // Protect route
     useEffect(() => {
@@ -170,9 +174,9 @@ export default function CropAdvisoryPage() {
           image: selectedImage?.dataUrl,
           query: manualNote.trim() || undefined,
           location: {
-            latitude,
-            longitude,
-            placeName,
+            latitude: effectiveLatitude,
+            longitude: effectiveLongitude,
+            placeName: effectivePlaceName,
           },
         }),
         signal: controller.signal,
@@ -216,7 +220,7 @@ export default function CropAdvisoryPage() {
               <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Location</span>
               <span className="mt-1 inline-flex items-center gap-2 text-lg">
                 <MapPin className="h-4 w-4" />
-                {placeName}
+                {effectivePlaceName}
               </span>
               <Link
                 href="/home"

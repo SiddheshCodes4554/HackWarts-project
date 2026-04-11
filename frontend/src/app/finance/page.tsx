@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, BadgeIndianRupee, CheckCircle2, Loader2, Sprout } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
 import { useUser, type UserProfile } from "@/context/UserContext";
@@ -39,7 +39,11 @@ type FinancialFormState = {
   landArea?: number;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  "http://localhost:5000"
+).replace(/\/$/, "");
 
 function deriveIncomeLevel(landArea: number): string {
   if (landArea <= 2) {
@@ -95,13 +99,14 @@ export default function FinancePage() {
   const [advice, setAdvice] = useState<FinancialAdviceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [hasAutoFetched, setHasAutoFetched] = useState(false);
+  const lastAutoFetchKeyRef = useRef("");
+  const effectiveLocation = profile?.location_name || placeName;
 
   const fetchAdvice = async (profileOverride?: FinancialFormState) => {
     const payloadProfile = profileOverride ?? {
       landOwned,
       cropType,
-      location: placeName,
+      location: effectiveLocation,
       incomeLevel,
     };
 
@@ -146,19 +151,22 @@ export default function FinancePage() {
     setCropType(formState.cropType);
     setIncomeLevel(formState.incomeLevel);
 
-    if (!hasAutoFetched) {
-      setHasAutoFetched(true);
-      void fetchAdvice(formState);
+    const key = `${formState.location}|${formState.cropType}|${formState.landOwned}|${formState.incomeLevel}|${language}`;
+    if (lastAutoFetchKeyRef.current === key) {
+      return;
     }
+
+    lastAutoFetchKeyRef.current = key;
+    void fetchAdvice(formState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, placeName]);
+  }, [profile, placeName, language]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await fetchAdvice({
       landOwned,
       cropType,
-      location: placeName,
+      location: effectiveLocation,
       incomeLevel,
     });
   };
@@ -186,7 +194,7 @@ export default function FinancePage() {
               <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Location</span>
               <span className="mt-1 inline-flex items-center gap-2 text-lg">
                 <Sprout className="h-4 w-4" />
-                {placeName}
+                {effectiveLocation}
               </span>
             </div>
           </div>

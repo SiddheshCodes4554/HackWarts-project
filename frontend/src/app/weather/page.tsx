@@ -37,6 +37,10 @@ export default function WeatherPage() {
     const { latitude, longitude, placeName, isDetecting } = useLocation();
         const router = useRouter();
         const { user, profile } = useUser();
+
+    const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
+    const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
+    const effectivePlaceName = profile?.location_name || placeName;
     
         // Protect route
         useEffect(() => {
@@ -51,7 +55,7 @@ export default function WeatherPage() {
     const [locationModalOpen, setLocationModalOpen] = useState(false);
 
     useEffect(() => {
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        if (!Number.isFinite(effectiveLatitude) || !Number.isFinite(effectiveLongitude)) {
             return;
         }
 
@@ -63,7 +67,7 @@ export default function WeatherPage() {
 
             try {
                 const response = await fetch(
-                    `${API_BASE_URL}/weather?latitude=${latitude}&longitude=${longitude}`,
+                    `${API_BASE_URL}/weather?latitude=${effectiveLatitude}&longitude=${effectiveLongitude}`,
                     { signal: controller.signal },
                 );
                 const data = (await response.json().catch(() => ({}))) as
@@ -94,7 +98,7 @@ export default function WeatherPage() {
         return () => {
             controller.abort();
         };
-    }, [latitude, longitude]);
+    }, [effectiveLatitude, effectiveLongitude]);
 
     return (
         <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#e8f6ff_0%,_#f6fbff_36%,_#edf5fb_100%)] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
@@ -123,7 +127,7 @@ export default function WeatherPage() {
                     <div className="mt-5 flex flex-wrap items-center gap-3">
                         <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-800 ring-1 ring-sky-100">
                             <MapPin className="h-4 w-4" />
-                            {isDetecting ? "Detecting location..." : placeName}
+                            {isDetecting ? "Detecting location..." : effectivePlaceName}
                         </span>
                         <button
                             type="button"

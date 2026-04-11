@@ -2,13 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
+import { useLocation } from '@/context/LocationContext';
 import { useEffect, useState } from 'react';
 import { Loader, MapPin, AlertCircle, Check, Bell, Settings2, LogOut, BadgeInfo } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { emitLocationUpdatedToast } from '@/lib/locationEvents';
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user, profile, loading: userLoading, updateProfile } = useUser();
+  const { setLocation } = useLocation();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +106,11 @@ export default function ProfilePage() {
         primary_crop: formData.primary_crop,
         language: formData.language,
       });
+
+      if (Number.isFinite(formData.latitude) && Number.isFinite(formData.longitude) && formData.latitude !== 0 && formData.longitude !== 0) {
+        setLocation(formData.latitude, formData.longitude, formData.location_name);
+        emitLocationUpdatedToast();
+      }
 
       setSuccess(true);
       setIsEditing(false);
@@ -201,6 +209,13 @@ export default function ProfilePage() {
                   <MapPin className="w-4 h-4" />
                   {profile?.location_name || 'Not set'}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => router.push('/select-location')}
+                  className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  Change Location
+                </button>
               </div>
               <div className="rounded-2xl bg-slate-50 px-4 py-3">
                 <p className="text-xs font-semibold uppercase text-slate-500">Land Area</p>

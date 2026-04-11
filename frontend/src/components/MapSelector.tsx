@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Loader2, LocateFixed, MapPinned } from "lucide-react";
-import { reverseGeocode } from "../utils/reverseGeocode";
+import { reverseGeocodeStructured, StructuredLocation } from "../utils/reverseGeocode";
 import { useLocation } from "../context/LocationContext";
+import { LocationSearch, LocationSuggestion } from "./LocationSearch";
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629];
 const DEFAULT_ZOOM = 5;
@@ -41,11 +42,34 @@ function MapRecenter({ center }: { center: [number, number] }) {
   return null;
 }
 
+function DraggableMarker({
+  position,
+  onDragEnd,
+}: {
+  position: [number, number];
+  onDragEnd: (lat: number, lon: number) => void;
+}) {
+  return (
+    <Marker
+      position={position}
+      icon={defaultMarkerIcon}
+      draggable
+      eventHandlers={{
+        dragend: (event) => {
+          const latlng = event.target.getLatLng();
+          onDragEnd(latlng.lat, latlng.lng);
+        },
+      }}
+    />
+  );
+}
+
 type MapSelectorProps = {
   onDone?: () => void;
+  onLocationConfirmed?: (location: StructuredLocation) => void;
 };
 
-export default function MapSelector({ onDone }: MapSelectorProps) {
+export default function MapSelector({ onDone, onLocationConfirmed }: MapSelectorProps) {
   const { latitude, longitude, setLocation } = useLocation();
   const [selected, setSelected] = useState<[number, number]>(
     Number.isFinite(latitude) && Number.isFinite(longitude)
@@ -54,9 +78,32 @@ export default function MapSelector({ onDone }: MapSelectorProps) {
   );
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<StructuredLocation | null>(null);
   const [error, setError] = useState("");
 
   const markerPosition = useMemo(() => selected, [selected]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const updateAddress = async () => {
+      setLocationLoading(true);
+      const [lat, lon] = selected;
+      const resolved = await reverseGeocodeStructured(lat, lon);
+
+      if (!cancelled) {
+        setSelectedAddress(resolved);
+        setLocationLoading(false);
+      }
+    };
+
+    void updateAddress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
 
   const useMyLocation = async () => {
     if (!navigator.geolocation) {
@@ -91,8 +138,9 @@ export default function MapSelector({ onDone }: MapSelectorProps) {
 
     try {
       const [lat, lon] = selected;
-      const place = await reverseGeocode(lat, lon);
-      setLocation(lat, lon, place);
+      const resolved = selectedAddress ?? (await reverseGeocodeStructured(lat, lon));
+      setLocation(lat, lon, resolved.full_address);
+      onLocationConfirmed?.(resolved);
       onDone?.();
     } catch {
       setError("Unable to confirm location. Please retry.");
@@ -103,6 +151,12 @@ export default function MapSelector({ onDone }: MapSelectorProps) {
 
   return (
     <div className="space-y-4">
+      <LocationSearch
+        onSelect={(suggestion: LocationSuggestion) => {
+          setSelected([suggestion.lat, suggestion.lon]);
+        }}
+      />
+
       <div className="h-[320px] overflow-hidden rounded-2xl border border-slate-200">
         <MapContainer
           center={markerPosition}
@@ -116,7 +170,7 @@ export default function MapSelector({ onDone }: MapSelectorProps) {
           />
           <MapClickHandler onMapClick={(lat, lon) => setSelected([lat, lon])} />
           <MapRecenter center={markerPosition} />
-          <Marker position={markerPosition} icon={defaultMarkerIcon} />
+          <DraggableMarker position={markerPosition} onDragEnd={(lat, lon) => setSelected([lat, lon])} />
         </MapContainer>
       </div>
 
@@ -145,6 +199,12 @@ export default function MapSelector({ onDone }: MapSelectorProps) {
       <p className="text-xs text-slate-500">
         Selected: {selected[0].toFixed(4)}, {selected[1].toFixed(4)}
       </p>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        {locationLoading || !selectedAddress
+          ? "Resolving address..."
+          : `Village: ${selectedAddress.village || "-"} | District: ${selectedAddress.district || "-"} | State: ${selectedAddress.state || "-"}`}
+      </div>
 
       {error ? (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>

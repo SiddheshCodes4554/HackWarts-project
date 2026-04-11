@@ -6,6 +6,7 @@ import { analyzeCropRouter } from "./routes/analyzeCrop";
 import { chatRouter } from "./routes/chat";
 import { financeRouter } from "./routes/finance";
 import { marketRouter } from "./routes/market";
+import { userLocationRouter } from "./routes/userLocation";
 import { weatherRouter } from "./routes/weather";
 
 dotenv.config({
@@ -96,6 +97,7 @@ app.use(analyzeCropRouter);
 app.use(financeRouter);
 app.use(marketRouter);
 app.use(weatherRouter);
+app.use(userLocationRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({

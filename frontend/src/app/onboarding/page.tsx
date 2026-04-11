@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
 import { useLocation } from '@/context/LocationContext';
+import { emitLocationUpdatedToast } from '@/lib/locationEvents';
 import { supabase } from '@/lib/supabaseClient';
 import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
@@ -142,6 +143,7 @@ export default function OnboardingPage() {
 
       await refreshProfile();
       setLocation(resolvedLatitude, resolvedLongitude, resolvedLocationName);
+      emitLocationUpdatedToast();
 
       router.push('/home');
     } catch (err) {

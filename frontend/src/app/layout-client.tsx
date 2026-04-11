@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
+import { LocationUpdateToast } from '@/components/LocationUpdateToast';
 
 export default function RootLayoutClient({
   children,
@@ -87,6 +88,16 @@ export default function RootLayoutClient({
                 >
                   Finance
                 </Link>
+                <Link
+                  href="/select-location"
+                  className={`font-medium transition-colors ${
+                    pathname === '/select-location'
+                      ? 'text-green-600'
+                      : 'text-gray-600 hover:text-green-600'
+                  }`}
+                >
+                  Location
+                </Link>
               </div>
 
               {/* User Menu */}
@@ -156,6 +167,13 @@ export default function RootLayoutClient({
                   Finance
                 </Link>
                 <Link
+                  href="/select-location"
+                  className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Location
+                </Link>
+                <Link
                   href="/(tabs)/profile"
                   className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
                   onClick={() => setMobileMenuOpen(false)}
@@ -179,6 +197,7 @@ export default function RootLayoutClient({
 
       {/* Main Content */}
       {children}
+      <LocationUpdateToast />
     </>
   );
 }
