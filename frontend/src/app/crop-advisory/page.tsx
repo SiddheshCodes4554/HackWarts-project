@@ -168,6 +168,7 @@ export default function CropAdvisoryPage() {
       }
 
       setResult(data);
+      setError("");
     } catch (submissionError) {
       const message =
         submissionError instanceof DOMException && submissionError.name === "AbortError"

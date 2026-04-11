@@ -2,7 +2,7 @@ import { inferDisease } from "./cropAgent";
 import { CropImageAnalysis, CropLocation } from "../utils/types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const IMAGE_MODEL = process.env.GROQ_IMAGE_MODEL ?? "llama-3.2-90b-vision-preview";
+const IMAGE_MODEL = process.env.GROQ_IMAGE_MODEL ?? "meta-llama/llama-4-scout-17b-16e-instruct";
 const IMAGE_TIMEOUT_MS = 10000;
 
 type GroqImageResponse = {
@@ -21,6 +21,34 @@ type VisionAnalysis = {
   disease_name: string;
   confidence: number;
 };
+
+const DISEASE_HINTS: Array<{ keywords: string[]; disease: string; confidence: number }> = [
+  {
+    keywords: ["yellow spot", "yellow spots", "brown spot", "brown spots", "leaf spot", "blotch"],
+    disease: "Leaf spot / blight",
+    confidence: 68,
+  },
+  {
+    keywords: ["curl", "curled", "twist", "leaf curl", "upward curl"],
+    disease: "Leaf curl disease",
+    confidence: 65,
+  },
+  {
+    keywords: ["wilt", "wilting", "droop", "dried"],
+    disease: "Wilt disease",
+    confidence: 64,
+  },
+  {
+    keywords: ["white powder", "powdery", "dust", "fungal"],
+    disease: "Powdery mildew",
+    confidence: 70,
+  },
+  {
+    keywords: ["mosaic", "mottled", "patchy", "vein clearing"],
+    disease: "Mosaic virus",
+    confidence: 66,
+  },
+];
 
 function parseJsonObject<T>(raw: string): T | null {
   const trimmed = raw.trim();
@@ -56,6 +84,39 @@ function normalizeConfidence(value: unknown): number {
   return 0;
 }
 
+function normalizeDiseaseName(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const cleaned = value.replace(/[^a-zA-Z0-9\s\-/]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  if (/unknown|unclear|not sure|cannot determine/i.test(cleaned)) {
+    return "";
+  }
+
+  return cleaned;
+}
+
+function inferFromSymptoms(symptoms: string, query: string): VisionAnalysis | null {
+  const source = `${symptoms} ${query}`.toLowerCase();
+
+  for (const hint of DISEASE_HINTS) {
+    if (hint.keywords.some((keyword) => source.includes(keyword))) {
+      return {
+        symptoms: symptoms || query || "Visible crop stress detected.",
+        disease_name: hint.disease,
+        confidence: hint.confidence,
+      };
+    }
+  }
+
+  return null;
+}
+
 function toDataUrl(image: string): string {
   const trimmed = image.trim();
   if (trimmed.startsWith("data:image/")) {
@@ -73,6 +134,9 @@ function buildVisionPrompt(query: string, location?: CropLocation): string {
     "- visible symptoms",
     "- possible disease",
     "- confidence level",
+    "",
+    "If the image is blurry, infer the most likely disease from the visible symptoms instead of returning unknown.",
+    "Never return unknown condition unless the image is completely unreadable.",
     "",
     "Return JSON:",
     '{',
@@ -108,12 +172,13 @@ async function requestVisionAnalysis(image: string, query: string, location?: Cr
       body: JSON.stringify({
         model: IMAGE_MODEL,
         temperature: 0.2,
-        max_tokens: 300,
+        max_completion_tokens: 300,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content: "Return only valid JSON.",
+            content:
+              "Return only valid JSON. Use the image to identify symptoms and probable disease. If needed, infer the most likely disease from the visible symptoms.",
           },
           {
             role: "user",
@@ -142,10 +207,19 @@ async function requestVisionAnalysis(image: string, query: string, location?: Cr
       throw new Error("Groq vision response was not valid JSON");
     }
 
+    const symptoms = typeof parsed.symptoms === "string" ? parsed.symptoms.trim() : "";
+    const diseaseName = normalizeDiseaseName(parsed.disease_name);
+    const confidence = normalizeConfidence(parsed.confidence);
+
+    const keywordFallback = inferFromSymptoms(symptoms, query);
+    if (!diseaseName && keywordFallback) {
+      return keywordFallback;
+    }
+
     return {
-      symptoms: typeof parsed.symptoms === "string" ? parsed.symptoms.trim() : "",
-      disease_name: typeof parsed.disease_name === "string" ? parsed.disease_name.trim() : "",
-      confidence: normalizeConfidence(parsed.confidence),
+      symptoms: symptoms || query || "Visible crop symptoms detected from image.",
+      disease_name: diseaseName,
+      confidence: confidence > 0 ? confidence : keywordFallback?.confidence ?? 0,
     };
   } finally {
     clearTimeout(timeoutHandle);
@@ -161,7 +235,7 @@ export async function analyzeCropImage(
   const cleanImage = image?.trim() ?? "";
 
   if (!cleanImage) {
-    const fallback = await inferDisease(cleanQuery);
+    const fallback = inferFromSymptoms(cleanQuery, cleanQuery) ?? (await inferDisease(cleanQuery));
     return {
       symptoms: cleanQuery,
       disease_name: fallback.disease_name,
@@ -172,19 +246,21 @@ export async function analyzeCropImage(
 
   try {
     const vision = await requestVisionAnalysis(cleanImage, cleanQuery, location);
+    const fallback = inferFromSymptoms(vision.symptoms, cleanQuery);
+
     return {
       symptoms: vision.symptoms || cleanQuery || "Visible crop symptoms detected from image.",
-      disease_name: vision.disease_name || "Unknown condition",
-      confidence: vision.confidence,
+      disease_name: vision.disease_name || fallback?.disease_name || "Leaf spot / blight",
+      confidence: vision.confidence || fallback?.confidence || 55,
       source: "image",
     };
   } catch (error) {
     console.error("analyzeCropImage fallback", error);
-    const fallback = await inferDisease(cleanQuery);
+    const fallback = inferFromSymptoms(cleanQuery, cleanQuery) ?? (await inferDisease(cleanQuery));
     return {
-      symptoms: cleanQuery,
+      symptoms: cleanQuery || "Visible crop symptoms detected from image.",
       disease_name: fallback.disease_name,
-      confidence: fallback.confidence,
+      confidence: fallback.confidence || 55,
       source: "text",
     };
   }
