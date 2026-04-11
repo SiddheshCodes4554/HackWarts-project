@@ -5,6 +5,15 @@ import {
 import { GovernmentScheme } from "../utils/types";
 
 const SCHEME_API_TIMEOUT_MS = 12000;
+let schemeFallbackWarned = false;
+
+type RequestVariant = {
+  label: string;
+  url: string;
+  method: "GET" | "POST";
+  headers: Record<string, string>;
+  body?: string;
+};
 
 type LiveSchemeCatalog = {
   schemes: GovernmentScheme[];
@@ -112,34 +121,88 @@ async function fetchFromGovernmentApi(): Promise<LiveSchemeCatalog> {
   const timeoutHandle = setTimeout(() => controller.abort(), SCHEME_API_TIMEOUT_MS);
 
   try {
+    const baseHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+      Accept: "application/json",
+    };
+
     const query = new URLSearchParams();
     query.set("q", "farmer scheme india");
     query.set("limit", "100");
     query.set("_ts", Date.now().toString());
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-    };
+    const getUrl = `${apiUrl}?${query.toString()}`;
+    const getUrlWithQueryKey = apiKey
+      ? `${getUrl}&api-key=${encodeURIComponent(apiKey)}`
+      : getUrl;
 
-    if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`;
-      headers["x-api-key"] = apiKey;
+    const variants: RequestVariant[] = [
+      {
+        label: "GET x-api-key + bearer",
+        url: getUrl,
+        method: "GET",
+        headers: apiKey
+          ? { ...baseHeaders, "x-api-key": apiKey, Authorization: `Bearer ${apiKey}` }
+          : baseHeaders,
+      },
+      {
+        label: "GET x-api-key",
+        url: getUrl,
+        method: "GET",
+        headers: apiKey ? { ...baseHeaders, "x-api-key": apiKey } : baseHeaders,
+      },
+      {
+        label: "GET bearer",
+        url: getUrl,
+        method: "GET",
+        headers: apiKey ? { ...baseHeaders, Authorization: `Bearer ${apiKey}` } : baseHeaders,
+      },
+      {
+        label: "GET query api-key",
+        url: getUrlWithQueryKey,
+        method: "GET",
+        headers: baseHeaders,
+      },
+      {
+        label: "POST x-api-key",
+        url: apiUrl,
+        method: "POST",
+        headers: apiKey ? { ...baseHeaders, "x-api-key": apiKey } : baseHeaders,
+        body: JSON.stringify({ q: "farmer scheme india", limit: 100 }),
+      },
+    ];
+
+    let payload: unknown = {};
+    let lastError: Error | null = null;
+
+    for (const variant of variants) {
+      try {
+        const response = await fetch(variant.url, {
+          method: variant.method,
+          headers: variant.headers,
+          body: variant.body,
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Government schemes API failed: HTTP ${response.status} via ${variant.label}`);
+        }
+
+        payload = await response.json().catch(() => ({}));
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error("Unknown government API error");
+      }
     }
 
-    const response = await fetch(`${apiUrl}?${query.toString()}`, {
-      method: "GET",
-      headers,
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Government schemes API failed: HTTP ${response.status}`);
+    if (lastError) {
+      throw lastError;
     }
 
-    const payload = await response.json().catch(() => ({}));
     const records = parseApiPayload(payload);
 
     const liveMap = new Map<string, ApiRecord>();
@@ -168,7 +231,15 @@ export async function fetchGovernmentSchemesCatalog(): Promise<LiveSchemeCatalog
   try {
     return await fetchFromGovernmentApi();
   } catch (error) {
-    console.error("fetchGovernmentSchemesCatalog fallback", error);
+    if (!schemeFallbackWarned) {
+      const message = error instanceof Error ? error.message : "catalog unavailable";
+      if (message.includes("HTTP 403")) {
+        console.info("Government schemes API key rejected (HTTP 403); using baseline schemes catalog.");
+      } else {
+        console.warn(`Using fallback government schemes catalog (${message})`);
+      }
+      schemeFallbackWarned = true;
+    }
     return {
       schemes: GOVERNMENT_SCHEMES,
       fetched_at: new Date().toISOString(),

@@ -85,7 +85,15 @@ export async function getDashboardData(location: DashboardLocation): Promise<Das
     weather,
     crops,
     market,
-    finance: financeResult.value,
+    finance: {
+      schemes: financeResult.value.schemes.map((scheme, index) => ({
+        name: scheme.name,
+        benefit: scheme.benefit,
+        amountINR: Math.max(5000, 12000 - index * 1500),
+        eligibility: scheme.eligibility.join("; "),
+      })),
+      advice: financeResult.value.advice,
+    },
     soil,
   };
 }
