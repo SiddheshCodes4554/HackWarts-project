@@ -44,4 +44,5 @@ export type OrchestratedChatResponse = {
   reply: string;
   agentResults: AgentResult[];
   timestamp: string;
+  error?: string;
 };

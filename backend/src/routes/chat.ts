@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
-import { orchestrateChat } from "../orchestrator/orchestrator";
-import { ChatRequestPayload } from "../utils/types";
+import { handleQuery } from "../orchestrator/orchestrator";
+import { ChatRequestPayload, OrchestratedChatResponse } from "../utils/types";
 
 const chatRouter = Router();
 
@@ -40,20 +40,32 @@ chatRouter.post("/chat", async (req: Request, res: Response) => {
       });
     }
 
-    const response = await orchestrateChat({
-      message,
-      locale,
+    const response = await handleQuery(message, {
       latitude,
       longitude,
+      placeName: locale,
     });
 
     return res.status(200).json(response);
   } catch (error) {
     console.error("Chat route error", error);
 
-    return res.status(500).json({
+    const fallbackResponse: OrchestratedChatResponse = {
+      weather: {},
+      crops: {},
+      market: {},
+      finance: {},
+      final_message:
+        "I'm having trouble processing your request right now. Please try again in a moment.",
+      reply:
+        "I'm having trouble processing your request right now. Please try again in a moment.",
+      intent: "general_query",
+      agentResults: [],
+      timestamp: new Date().toISOString(),
       error: "Unable to process chat request",
-    });
+    };
+
+    return res.status(200).json(fallbackResponse);
   }
 });
 
