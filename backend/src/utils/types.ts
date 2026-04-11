@@ -6,6 +6,8 @@ export type ChatRequestPayload = {
   crop?: string;
   disease?: string;
   language?: string;
+  landOwned?: boolean;
+  incomeLevel?: string;
   location?: {
     latitude?: number;
     longitude?: number;
@@ -21,7 +23,40 @@ export type AgentContext = {
   locale?: string;
   latitude?: number;
   longitude?: number;
+  language?: string;
+  cropType?: string;
+  landOwned?: boolean;
+  incomeLevel?: string;
   timestamp: string;
+};
+
+export type GovernmentScheme = {
+  name: string;
+  benefit: string;
+  eligibility: string[];
+  documents: string[];
+  apply_steps: string[];
+  source?: string;
+  source_url?: string;
+  last_updated?: string;
+};
+
+export type FinancialUserProfile = {
+  landOwned: boolean;
+  cropType: string;
+  location: string;
+  incomeLevel: string;
+};
+
+export type FinancialAdviceResult = {
+  schemes: GovernmentScheme[];
+  advice: string;
+  steps: string[];
+  language: string;
+  profile: FinancialUserProfile;
+  fetched_at: string;
+  data_source: string;
+  api_live: boolean;
 };
 
 export type WeatherAdvisory = {

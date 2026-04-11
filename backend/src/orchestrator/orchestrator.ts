@@ -19,6 +19,8 @@ type QueryLocation = {
   crop?: string;
   disease?: string;
   language?: string;
+  landOwned?: boolean;
+  incomeLevel?: string;
 };
 
 function toStructuredAgentOutput(result?: AgentResult): Record<string, unknown> {
@@ -45,6 +47,10 @@ export async function handleQuery(
     locale: location?.placeName,
     latitude: location?.latitude,
     longitude: location?.longitude,
+    language: location?.language,
+    cropType: location?.crop,
+    landOwned: location?.landOwned,
+    incomeLevel: location?.incomeLevel,
     timestamp,
   };
 
@@ -113,14 +119,17 @@ export async function handleQuery(
 
   const weather = toStructuredAgentOutput(weatherResult);
   const crops = cropAdvice ?? toStructuredAgentOutput(cropResult);
+  const resolvedCropAdvice = cropAdvice;
   const market = toStructuredAgentOutput(marketResult);
   const finance = toStructuredAgentOutput(financeResult);
 
   if (intentResult.intent === "general_query") {
     const general = await generateResponse(cleanQuery);
     finalMessage = general.message;
-  } else if (intentResult.intent === "crop_advice" && cropAdvice) {
-    finalMessage = cropAdvice.summary;
+  } else if (intentResult.intent === "crop_advice") {
+    finalMessage = resolvedCropAdvice?.summary ?? "Crop advice is unavailable right now.";
+  } else if (intentResult.intent === "financial_help") {
+    finalMessage = financeResult?.insight ?? "Financial guidance is unavailable right now.";
   } else {
     const combined = await generateResponse(
       [
@@ -168,5 +177,7 @@ export async function orchestrateChat(
     crop: payload.crop,
     disease: payload.disease,
     language: payload.language,
+    landOwned: payload.landOwned,
+    incomeLevel: payload.incomeLevel,
   });
 }

@@ -47,6 +47,8 @@ chatRouter.post("/chat", async (req: Request, res: Response) => {
       crop: typeof payload.crop === "string" ? payload.crop : undefined,
       disease: typeof payload.disease === "string" ? payload.disease : undefined,
       language: typeof payload.language === "string" ? payload.language : undefined,
+      landOwned: typeof payload.landOwned === "boolean" ? payload.landOwned : undefined,
+      incomeLevel: typeof payload.incomeLevel === "string" ? payload.incomeLevel : undefined,
     });
 
     return res.status(200).json(response);
