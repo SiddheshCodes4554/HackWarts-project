@@ -21,7 +21,11 @@ type WeatherResponse = {
     advice: string;
 };
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+const API_BASE_URL = (
+    process.env.NEXT_PUBLIC_API_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    ""
+).replace(/\/$/, "");
 
 export default function WeatherPage() {
     const { latitude, longitude, placeName, isDetecting } = useLocation();

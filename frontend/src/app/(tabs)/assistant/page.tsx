@@ -42,7 +42,11 @@ type ChatApiResponse = {
   finance?: SectionData;
 };
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  ""
+).replace(/\/$/, "");
 const CHAT_TIMEOUT_MS = 15000;
 
 function toDisplayText(value: unknown): string {
