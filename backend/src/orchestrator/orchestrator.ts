@@ -2,7 +2,7 @@ import { cropAgent } from "../agents/cropAgent";
 import { financeAgent } from "../agents/financeAgent";
 import { marketAgent } from "../agents/marketAgent";
 import { weatherAgent } from "../agents/weatherAgent";
-import { generateResponse } from "../services/groqService";
+import { detectIntent, generateResponse } from "../services/groqService";
 import {
   AgentContext,
   ChatRequestPayload,
@@ -29,9 +29,13 @@ export async function orchestrateChat(
     .map((result) => `${result.agent}:${result.insight}`)
     .join(" | ");
 
+  const detectedIntent = await detectIntent(payload.message);
+
   const llmResult = await generateResponse(
     [
       `User query: ${payload.message}`,
+      `Detected intent: ${detectedIntent.intent}`,
+      `Detected entities: ${JSON.stringify(detectedIntent.entities)}`,
       `Agent insights: ${contextSummary}`,
       "Return a concise and practical answer for a farmer.",
     ].join("\n"),
@@ -39,7 +43,7 @@ export async function orchestrateChat(
 
   return {
     reply: llmResult.message,
-    intent: llmResult.intent,
+    intent: detectedIntent.intent,
     agentResults,
     timestamp: context.timestamp,
   };
