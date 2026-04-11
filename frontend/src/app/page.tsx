@@ -7,6 +7,13 @@ import { useEffect } from 'react';
 export default function HomeRedirect() {
   const router = useRouter();
   const { user, profile, loading } = useUser();
+  const roleSource =
+    (typeof profile?.role === 'string' && profile.role) ||
+    (typeof profile?.user_type === 'string' && profile.user_type) ||
+    (typeof profile?.account_type === 'string' && profile.account_type) ||
+    (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
+    'farmer';
+  const isBuyer = String(roleSource).toLowerCase() === 'buyer';
 
   useEffect(() => {
     // Wait for auth check to complete
@@ -27,8 +34,8 @@ export default function HomeRedirect() {
     }
 
     // If fully set up, redirect to home
-    router.replace('/home');
-  }, [user, profile, loading, router]);
+    router.replace(isBuyer ? '/bidding-dashboard' : '/home');
+  }, [isBuyer, user, profile, loading, router]);
 
   // Show loading state while checking auth
   return (

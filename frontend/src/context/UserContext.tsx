@@ -13,6 +13,9 @@ export interface UserProfile {
   land_area: number;
   primary_crop: string;
   language: string;
+  role?: 'farmer' | 'buyer';
+  user_type?: string;
+  account_type?: string;
   created_at: string;
   updated_at: string;
 }
@@ -28,11 +31,39 @@ export interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+function isInvalidRefreshTokenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const message = 'message' in error && typeof error.message === 'string'
+    ? error.message.toLowerCase()
+    : '';
+
+  return (
+    message.includes('invalid refresh token') ||
+    message.includes('refresh token not found') ||
+    message.includes('refresh_token_not_found')
+  );
+}
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const clearLocalSession = async () => {
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // Ignore local sign-out cleanup issues.
+    }
+
+    setUser(null);
+    setProfile(null);
+    setError(null);
+  };
 
   // Fetch user profile from Supabase
   const fetchProfile = async (userId: string) => {
@@ -73,8 +104,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           setProfile(null);
         }
       } catch (err) {
-        console.error('Error checking auth:', err);
-        setError(err instanceof Error ? err.message : 'Auth error');
+        if (isInvalidRefreshTokenError(err)) {
+          await clearLocalSession();
+        } else {
+          console.error('Error checking auth:', err);
+          setError(err instanceof Error ? err.message : 'Auth error');
+        }
       } finally {
         setLoading(false);
       }
@@ -83,10 +118,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
 
     // Listen to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
       if (session?.user) {
         setUser(session.user);
-        fetchProfile(session.user.id);
+        await fetchProfile(session.user.id);
       } else {
         setUser(null);
         setProfile(null);

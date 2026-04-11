@@ -43,6 +43,14 @@ type GroqApiResponse = {
   };
 };
 
+type GroqJsonRequest = {
+  systemPrompt: string;
+  userPrompt: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+};
+
 function fallbackResponse(message: string, intent = "fallback_advice"): StructuredGroqResponse {
   return {
     intent,
@@ -298,6 +306,71 @@ async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGr
     }
 
     return parsed;
+  } finally {
+    clearTimeout(requestTimeout);
+  }
+}
+
+export async function requestGroqJson<T>(request: GroqJsonRequest, fallback: T): Promise<T> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return fallback;
+  }
+
+  const controller = new AbortController();
+  const requestTimeout = setTimeout(() => controller.abort(), timeoutMs());
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: request.model ?? GROQ_MODEL,
+        temperature: request.temperature ?? 0.1,
+        max_tokens: request.maxTokens ?? 420,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: request.systemPrompt,
+          },
+          {
+            role: "user",
+            content: request.userPrompt,
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as GroqApiResponse;
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const rawContent = payload.choices?.[0]?.message?.content;
+    if (!rawContent) {
+      return fallback;
+    }
+
+    try {
+      return JSON.parse(rawContent) as T;
+    } catch {
+      const match = rawContent.match(/\{[\s\S]*\}/);
+      if (!match) {
+        return fallback;
+      }
+      try {
+        return JSON.parse(match[0]) as T;
+      } catch {
+        return fallback;
+      }
+    }
+  } catch {
+    return fallback;
   } finally {
     clearTimeout(requestTimeout);
   }

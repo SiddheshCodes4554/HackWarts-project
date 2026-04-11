@@ -7,6 +7,8 @@ import { LogOut, User, Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { LocationUpdateToast } from '@/components/LocationUpdateToast';
 
+const BUYER_ALLOWED_ROUTES = new Set(['/bidding-dashboard', '/profile', '/(tabs)/profile']);
+
 export default function RootLayoutClient({
   children,
 }: {
@@ -16,6 +18,14 @@ export default function RootLayoutClient({
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const roleSource =
+    (typeof profile?.role === 'string' && profile.role) ||
+    (typeof profile?.user_type === 'string' && profile.user_type) ||
+    (typeof profile?.account_type === 'string' && profile.account_type) ||
+    (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
+    'farmer';
+  const normalizedRole = String(roleSource).toLowerCase();
+  const isBuyer = normalizedRole === 'buyer';
 
   // Don't show navbar on auth pages
   const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register') || pathname?.includes('/onboarding');
@@ -32,13 +42,13 @@ export default function RootLayoutClient({
 
     // Logged-in users should not reach login/register.
     if (user && (isLogin || isRegister)) {
-      router.replace(profile ? '/home' : '/onboarding');
+      router.replace(profile ? (isBuyer ? '/bidding-dashboard' : '/home') : '/onboarding');
       return;
     }
 
     // Onboarding is only for users without completed profile.
     if (user && profile && isOnboarding) {
-      router.replace('/home');
+      router.replace(isBuyer ? '/bidding-dashboard' : '/home');
       return;
     }
 
@@ -51,8 +61,14 @@ export default function RootLayoutClient({
     // Authenticated users without profile should complete onboarding first.
     if (user && !profile && !isOnboarding && !isLogin && !isRegister && pathname !== '/') {
       router.replace('/onboarding');
+      return;
     }
-  }, [loading, pathname, profile, router, user]);
+
+    // Buyers should only access bidding dashboard and profile screens.
+    if (user && profile && isBuyer && !isPublicAuthRoute && pathname !== '/' && !BUYER_ALLOWED_ROUTES.has(pathname)) {
+      router.replace('/bidding-dashboard');
+    }
+  }, [isBuyer, loading, pathname, profile, router, user]);
 
   const handleLogout = async () => {
     try {
@@ -82,46 +98,82 @@ export default function RootLayoutClient({
 
               {/* Desktop Menu */}
               <div className="hidden md:flex items-center gap-8">
-                <Link
-                  href="/"
-                  className={`font-medium transition-colors ${
-                    pathname === '/'
-                      ? 'text-green-600'
-                      : 'text-gray-600 hover:text-green-600'
-                  }`}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/crop-advisory"
-                  className={`font-medium transition-colors ${
-                    pathname === '/crop-advisory'
-                      ? 'text-green-600'
-                      : 'text-gray-600 hover:text-green-600'
-                  }`}
-                >
-                  Crop Advisory
-                </Link>
-                <Link
-                  href="/weather"
-                  className={`font-medium transition-colors ${
-                    pathname === '/weather'
-                      ? 'text-green-600'
-                      : 'text-gray-600 hover:text-green-600'
-                  }`}
-                >
-                  Weather
-                </Link>
-                <Link
-                  href="/finance"
-                  className={`font-medium transition-colors ${
-                    pathname === '/finance'
-                      ? 'text-green-600'
-                      : 'text-gray-600 hover:text-green-600'
-                  }`}
-                >
-                  Finance
-                </Link>
+                {isBuyer && (
+                  <Link
+                    href="/bidding-dashboard"
+                    className={`font-medium transition-colors ${
+                      pathname === '/bidding-dashboard'
+                        ? 'text-green-600'
+                        : 'text-gray-600 hover:text-green-600'
+                    }`}
+                  >
+                    Bidding Dashboard
+                  </Link>
+                )}
+                {!isBuyer && (
+                  <>
+                    <Link
+                      href="/"
+                      className={`font-medium transition-colors ${
+                        pathname === '/'
+                          ? 'text-green-600'
+                          : 'text-gray-600 hover:text-green-600'
+                      }`}
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/crop-advisory"
+                      className={`font-medium transition-colors ${
+                        pathname === '/crop-advisory'
+                          ? 'text-green-600'
+                          : 'text-gray-600 hover:text-green-600'
+                      }`}
+                    >
+                      Crop Advisory
+                    </Link>
+                    <Link
+                      href="/weather"
+                      className={`font-medium transition-colors ${
+                        pathname === '/weather'
+                          ? 'text-green-600'
+                          : 'text-gray-600 hover:text-green-600'
+                      }`}
+                    >
+                      Weather
+                    </Link>
+                    <Link
+                      href="/finance"
+                      className={`font-medium transition-colors ${
+                        pathname === '/finance'
+                          ? 'text-green-600'
+                          : 'text-gray-600 hover:text-green-600'
+                      }`}
+                    >
+                      Finance
+                    </Link>
+                    <Link
+                      href="/community"
+                      className={`font-medium transition-colors ${
+                        pathname === '/community'
+                          ? 'text-green-600'
+                          : 'text-gray-600 hover:text-green-600'
+                      }`}
+                    >
+                      Community
+                    </Link>
+                    <Link
+                      href="/marketplace"
+                      className={`font-medium transition-colors ${
+                        pathname === '/marketplace'
+                          ? 'text-green-600'
+                          : 'text-gray-600 hover:text-green-600'
+                      }`}
+                    >
+                      Marketplace
+                    </Link>
+                  </>
+                )}
               </div>
 
               {/* User Menu */}
@@ -162,34 +214,61 @@ export default function RootLayoutClient({
             {/* Mobile Menu */}
             {mobileMenuOpen && (
               <div className="md:hidden pb-4 space-y-2">
-                <Link
-                  href="/"
-                  className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/crop-advisory"
-                  className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Crop Advisory
-                </Link>
-                <Link
-                  href="/weather"
-                  className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Weather
-                </Link>
-                <Link
-                  href="/finance"
-                  className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Finance
-                </Link>
+                {isBuyer && (
+                  <Link
+                    href="/bidding-dashboard"
+                    className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Bidding Dashboard
+                  </Link>
+                )}
+                {!isBuyer && (
+                  <>
+                    <Link
+                      href="/"
+                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/crop-advisory"
+                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Crop Advisory
+                    </Link>
+                    <Link
+                      href="/weather"
+                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Weather
+                    </Link>
+                    <Link
+                      href="/finance"
+                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Finance
+                    </Link>
+                    <Link
+                      href="/community"
+                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Community
+                    </Link>
+                    <Link
+                      href="/marketplace"
+                      className="block px-4 py-2 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Marketplace
+                    </Link>
+                  </>
+                )}
                 <Link
                   href="/(tabs)/profile"
                   className="block px-4 py-2 hover:bg-gray-100 rounded-lg"

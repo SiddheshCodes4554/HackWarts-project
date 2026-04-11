@@ -22,6 +22,13 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const roleSource =
+    (typeof profile?.role === 'string' && profile.role) ||
+    (typeof profile?.user_type === 'string' && profile.user_type) ||
+    (typeof profile?.account_type === 'string' && profile.account_type) ||
+    (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
+    'farmer';
+  const isBuyer = String(roleSource).toLowerCase() === 'buyer';
 
   useEffect(() => {
     if (userLoading) {
@@ -35,9 +42,9 @@ export default function OnboardingPage() {
 
     // Logged-in users with completed profile should not return to onboarding.
     if (profile) {
-      router.replace('/home');
+      router.replace(isBuyer ? '/bidding-dashboard' : '/home');
     }
-  }, [user, profile, userLoading, router]);
+  }, [isBuyer, user, profile, userLoading, router]);
 
   const requestGPSLocation = async () => {
     setGpsLoading(true);
@@ -93,7 +100,7 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (!name || !locationName || !landArea || !primaryCrop) {
+    if (!name || !locationName || (!isBuyer && (!landArea || !primaryCrop))) {
       setError('Please fill in all fields');
       setLoading(false);
       return;
@@ -142,8 +149,8 @@ export default function OnboardingPage() {
           location_name: resolvedLocationName,
           latitude: resolvedLatitude,
           longitude: resolvedLongitude,
-          land_area: parseFloat(landArea),
-          primary_crop: primaryCrop,
+          land_area: isBuyer ? 0 : parseFloat(landArea),
+          primary_crop: isBuyer ? 'Buyer' : primaryCrop,
           language,
           updated_at: new Date().toISOString(),
         });
@@ -154,7 +161,7 @@ export default function OnboardingPage() {
       setLocation(resolvedLatitude, resolvedLongitude, resolvedLocationName);
       emitLocationUpdatedToast();
 
-      router.replace('/home');
+      router.replace(isBuyer ? '/bidding-dashboard' : '/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
@@ -243,65 +250,70 @@ export default function OnboardingPage() {
             )}
           </div>
 
-          {/* Land Area */}
-          <div>
-            <label htmlFor="landArea" className="block text-sm font-medium text-gray-700 mb-2">
-              Land Area (in acres)
-            </label>
-            <input
-              id="landArea"
-              type="number"
-              step="0.1"
-              min="0"
-              value={landArea}
-              onChange={(e) => setLandArea(e.target.value)}
-              placeholder="2.5"
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
+          {!isBuyer && (
+            <>
+              {/* Land Area */}
+              <div>
+                <label htmlFor="landArea" className="block text-sm font-medium text-gray-700 mb-2">
+                  Land Area (in acres)
+                </label>
+                <input
+                  id="landArea"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={landArea}
+                  onChange={(e) => setLandArea(e.target.value)}
+                  placeholder="2.5"
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
 
-          {/* Primary Crop */}
-          <div>
-            <label htmlFor="primaryCrop" className="block text-sm font-medium text-gray-700 mb-2">
-              Primary Crop
-            </label>
-            <select
-              id="primaryCrop"
-              value={primaryCrop}
-              onChange={(e) => setPrimaryCrop(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="">Select a crop</option>
-              <option value="Rice">Rice</option>
-              <option value="Wheat">Wheat</option>
-              <option value="Corn">Corn</option>
-              <option value="Cotton">Cotton</option>
-              <option value="Sugarcane">Sugarcane</option>
-              <option value="Vegetables">Vegetables</option>
-              <option value="Fruits">Fruits</option>
-              <option value="Spices">Spices</option>
-              <option value="Pulses">Pulses</option>
-              <option value="Oilseeds">Oilseeds</option>
-            </select>
-          </div>
+              {/* Primary Crop */}
+              <div>
+                <label htmlFor="primaryCrop" className="block text-sm font-medium text-gray-700 mb-2">
+                  Primary Crop
+                </label>
+                <select
+                  id="primaryCrop"
+                  value={primaryCrop}
+                  onChange={(e) => setPrimaryCrop(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="">Select a crop</option>
+                  <option value="Rice">Rice</option>
+                  <option value="Wheat">Wheat</option>
+                  <option value="Corn">Corn</option>
+                  <option value="Cotton">Cotton</option>
+                  <option value="Sugarcane">Sugarcane</option>
+                  <option value="Vegetables">Vegetables</option>
+                  <option value="Fruits">Fruits</option>
+                  <option value="Spices">Spices</option>
+                  <option value="Pulses">Pulses</option>
+                  <option value="Oilseeds">Oilseeds</option>
+                </select>
+              </div>
+            </>
+          )}
 
-          {/* Language */}
-          <div>
-            <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-2">
-              Preferred Language
-            </label>
-            <select
-              id="language"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="English">English</option>
-              <option value="Hindi">Hindi</option>
-            </select>
-          </div>
+          {!isBuyer && (
+            <div>
+              <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-2">
+                Preferred Language
+              </label>
+              <select
+                id="language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="English">English</option>
+                <option value="Hindi">Hindi</option>
+              </select>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -314,7 +326,7 @@ export default function OnboardingPage() {
                 Saving...
               </>
             ) : (
-              'Complete Onboarding'
+              isBuyer ? 'Complete Buyer Setup' : 'Complete Onboarding'
             )}
           </button>
         </form>

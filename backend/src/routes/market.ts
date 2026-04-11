@@ -585,6 +585,60 @@ marketRouter.get("/market/details", async (req: Request, res: Response) => {
   }
 });
 
+marketRouter.post("/market/price-guardian", async (req: Request, res: Response) => {
+  try {
+    const commodity = typeof req.body?.commodity === "string" ? req.body.commodity.trim() : "";
+    const rawDistrict = typeof req.body?.district === "string" ? req.body.district.trim() : "";
+    const rawState = typeof req.body?.state === "string" ? req.body.state.trim() : "";
+    const district = isUsefulLocationToken(rawDistrict) ? normalizeLocationToken(rawDistrict) : "";
+    const state = isUsefulLocationToken(rawState) ? normalizeLocationToken(rawState) : "";
+    const bidPrice = parsePrice(req.body?.bidPrice);
+
+    if (!commodity || bidPrice <= 0) {
+      return res.status(400).json({ error: "commodity and positive bidPrice are required" });
+    }
+
+    const records = await fetchAgmarknetRecordsWithFallback([
+      { commodity, district, state },
+      { commodity, state },
+      { commodity, district },
+      { commodity },
+    ]);
+
+    const validPrices = records
+      .map((record) => ({
+        date: parseDate(record.arrival_date),
+        price: parsePrice(record.modal_price),
+      }))
+      .filter((entry) => entry.date !== null && entry.price > 0)
+      .sort((a, b) => (b.date as Date).getTime() - (a.date as Date).getTime())
+      .slice(0, 20)
+      .map((entry) => entry.price);
+
+    if (!validPrices.length) {
+      return res.status(404).json({ error: "No live mandi price found for this commodity" });
+    }
+
+    const mandiPrice = validPrices.reduce((sum, value) => sum + value, 0) / validPrices.length;
+    const fairPrice = mandiPrice * 0.92;
+    const isFairDeal = bidPrice >= fairPrice;
+
+    return res.status(200).json({
+      commodity,
+      district,
+      state,
+      mandiPrice: Math.round(mandiPrice),
+      fairPrice: Math.round(fairPrice),
+      bidPrice: Math.round(bidPrice),
+      verdict: isFairDeal ? "Fair Deal" : "Bid too low",
+      warning: isFairDeal ? null : "Bid is below fair price benchmark based on AGMARKNET mandi prices.",
+    });
+  } catch (error) {
+    console.error("market/price-guardian route error", error);
+    return res.status(500).json({ error: "Unable to evaluate bid fairness" });
+  }
+});
+
 marketRouter.post("/market-alerts", (req: Request, res: Response) => {
   try {
     const commodity = typeof req.body?.commodity === "string" ? req.body.commodity.trim() : "";

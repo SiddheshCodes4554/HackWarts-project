@@ -10,6 +10,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [accountRole, setAccountRole] = useState<'farmer' | 'buyer'>('farmer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -86,6 +87,11 @@ export default function RegisterPage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
+        options: {
+          data: {
+            role: accountRole,
+          },
+        },
       });
 
       if (signUpError) {
@@ -162,6 +168,34 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleRegister} className="space-y-6">
+          <div>
+            <span className="block text-sm font-medium text-gray-700 mb-2">Register As</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountRole('farmer')}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                  accountRole === 'farmer'
+                    ? 'border-green-600 bg-green-50 text-green-700'
+                    : 'border-gray-300 text-gray-700 hover:border-green-300'
+                }`}
+              >
+                Farmer
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountRole('buyer')}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                  accountRole === 'buyer'
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 text-gray-700 hover:border-blue-300'
+                }`}
+              >
+                Buyer
+              </button>
+            </div>
+          </div>
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address

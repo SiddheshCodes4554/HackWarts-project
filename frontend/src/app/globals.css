@@ -25,3 +25,38 @@ body {
   color: var(--foreground);
   font-family: "Manrope", "Segoe UI", Arial, sans-serif;
 }
+
+/* Keep form controls readable regardless of OS color scheme preference. */
+input,
+textarea,
+select {
+  color: #0f172a;
+  background-color: #ffffff;
+  caret-color: #0f172a;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: #475569;
+  background-color: #f1f5f9;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a;
+  transition: background-color 5000s ease-in-out 0s;
+}

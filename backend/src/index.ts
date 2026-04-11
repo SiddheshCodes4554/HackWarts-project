@@ -4,6 +4,7 @@ import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { analyzeCropRouter } from "./routes/analyzeCrop";
 import { chatRouter } from "./routes/chat";
+import { communityRouter } from "./routes/community";
 import { dashboardRouter } from "./routes/dashboard";
 import { financeRouter } from "./routes/finance";
 import { marketRouter } from "./routes/market";
@@ -94,6 +95,7 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use(chatRouter);
+app.use(communityRouter);
 app.use(dashboardRouter);
 app.use(analyzeCropRouter);
 app.use(financeRouter);

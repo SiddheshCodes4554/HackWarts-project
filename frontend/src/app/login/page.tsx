@@ -11,8 +11,16 @@ export default function LoginPage() {
   const { user, profile, loading: userLoading } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [accountRole, setAccountRole] = useState<'farmer' | 'buyer'>('farmer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const roleSource =
+    (typeof profile?.role === 'string' && profile.role) ||
+    (typeof profile?.user_type === 'string' && profile.user_type) ||
+    (typeof profile?.account_type === 'string' && profile.account_type) ||
+    (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
+    accountRole;
+  const isBuyer = String(roleSource).toLowerCase() === 'buyer';
 
   useEffect(() => {
     if (userLoading) {
@@ -20,9 +28,9 @@ export default function LoginPage() {
     }
 
     if (user) {
-      router.replace(profile ? '/home' : '/onboarding');
+      router.replace(profile ? (isBuyer ? '/bidding-dashboard' : '/home') : '/onboarding');
     }
-  }, [user, profile, userLoading, router]);
+  }, [isBuyer, user, profile, userLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +38,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -38,6 +46,16 @@ export default function LoginPage() {
       if (loginError) {
         setError(loginError.message);
       } else {
+        const metadataRole = typeof data.user?.user_metadata?.role === 'string'
+          ? data.user.user_metadata.role.toLowerCase()
+          : '';
+
+        if (metadataRole && metadataRole !== accountRole) {
+          await supabase.auth.signOut();
+          setError(`This account is registered as ${metadataRole}. Please choose ${metadataRole} login.`);
+          return;
+        }
+
         router.replace('/');
       }
     } catch (err) {
@@ -62,6 +80,34 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <span className="block text-sm font-medium text-gray-700 mb-2">Login As</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountRole('farmer')}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                  accountRole === 'farmer'
+                    ? 'border-green-600 bg-green-50 text-green-700'
+                    : 'border-gray-300 text-gray-700 hover:border-green-300'
+                }`}
+              >
+                Farmer
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountRole('buyer')}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                  accountRole === 'buyer'
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 text-gray-700 hover:border-blue-300'
+                }`}
+              >
+                Buyer
+              </button>
+            </div>
+          </div>
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
