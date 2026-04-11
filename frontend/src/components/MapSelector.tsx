@@ -3,9 +3,6 @@
 import { useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { Loader2, LocateFixed, MapPinned } from "lucide-react";
 import { reverseGeocode } from "../utils/reverseGeocode";
 import { useLocation } from "../context/LocationContext";
@@ -13,12 +10,15 @@ import { useLocation } from "../context/LocationContext";
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629];
 const DEFAULT_ZOOM = 5;
 
-// Fix Leaflet marker icon path resolution in Next.js bundles.
-delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x.src,
-  iconUrl: markerIcon.src,
-  shadowUrl: markerShadow.src,
+// Use explicit icon URLs to avoid bundle/path issues in production deployments.
+const defaultMarkerIcon = L.icon({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
 });
 
 function MapClickHandler({
@@ -116,7 +116,7 @@ export default function MapSelector({ onDone }: MapSelectorProps) {
           />
           <MapClickHandler onMapClick={(lat, lon) => setSelected([lat, lon])} />
           <MapRecenter center={markerPosition} />
-          <Marker position={markerPosition} />
+          <Marker position={markerPosition} icon={defaultMarkerIcon} />
         </MapContainer>
       </div>
 
