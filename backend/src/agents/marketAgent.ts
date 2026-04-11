@@ -369,6 +369,11 @@ export async function getMarketData(input: MarketInput): Promise<MarketDashboard
     bestMarket: llm.best_market,
     recommendation: llm.recommendation,
     signal: llm.signal,
+    trend: markets.slice(0, 7).map((market) => ({
+      date: market.arrivalDate,
+      price: market.modalPrice,
+      arrivals: 0,
+    })),
   };
 }
 

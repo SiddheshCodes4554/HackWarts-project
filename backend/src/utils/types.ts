@@ -112,6 +112,11 @@ export type MarketDashboardInsight = {
   bestMarket: string;
   recommendation: string;
   signal: "SELL" | "HOLD";
+  trend: Array<{
+    date: string;
+    price: number;
+    arrivals: number;
+  }>;
 };
 
 export type FinanceScheme = {
@@ -127,11 +132,29 @@ export type FinanceDashboardInsight = {
 };
 
 export type DashboardData = {
-  weather: WeatherAdvisory;
+  weather: {
+    current: {
+      temperature: number;
+      humidity: number;
+      windSpeed: number;
+      rainProbability: number;
+      icon: string;
+      description: string;
+    };
+    forecast: Array<{
+      label: string;
+      temperature: number;
+      rainProbability: number;
+      humidity: number;
+    }>;
+  };
   crops: CropDashboardInsight;
   market: MarketDashboardInsight;
   finance: FinanceDashboardInsight;
-  soil: SoilProfile;
+  soil: SoilProfile & {
+    healthScore: number;
+  };
+  insights: string[];
 };
 
 export type CropLocation = {

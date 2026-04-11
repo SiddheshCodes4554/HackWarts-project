@@ -3,7 +3,7 @@ import { getDashboardData } from "../services/dashboardService";
 
 const dashboardRouter = Router();
 
-dashboardRouter.get("/dashboard", async (req: Request, res: Response) => {
+async function handleDashboardRequest(req: Request, res: Response) {
   const latitude = Number(req.query.latitude);
   const longitude = Number(req.query.longitude);
   const placeName =
@@ -31,6 +31,9 @@ dashboardRouter.get("/dashboard", async (req: Request, res: Response) => {
       error: "Unable to generate dashboard intelligence right now",
     });
   }
-});
+}
+
+dashboardRouter.get("/dashboard", handleDashboardRequest);
+dashboardRouter.get("/dashboard/data", handleDashboardRequest);
 
 export { dashboardRouter };
