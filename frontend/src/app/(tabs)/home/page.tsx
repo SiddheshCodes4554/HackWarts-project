@@ -82,7 +82,25 @@ type DashboardPayload = {
       arrivals: number;
     }>;
   };
+  crops: {
+    recommendations: Array<{
+      crop: string;
+      season: string;
+      reasoning: string;
+    }>;
+    summary: string;
+  };
+  finance: {
+    schemes: Array<{
+      name: string;
+      benefit: string;
+      amountINR: number;
+      eligibility: string;
+    }>;
+    advice: string;
+  };
   insights: string[];
+  warning?: string;
 };
 
 const API_BASE_URL = (
@@ -91,15 +109,213 @@ const API_BASE_URL = (
   ""
 ).replace(/\/$/, "");
 
-const fetcher = async (url: string): Promise<DashboardPayload> => {
-  const response = await fetch(url, { cache: "no-store" });
-  const data = (await response.json().catch(() => ({}))) as DashboardPayload & { error?: string };
+function isLocalBackendUrl(url: string): boolean {
+  return /localhost|127\.0\.0\.1/i.test(url);
+}
 
-  if (!response.ok) {
-    throw new Error(data.error ?? "Unable to load dashboard data");
+function resolveDashboardBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return API_BASE_URL || "/api";
   }
 
-  return data;
+  const isBrowserLocal =
+    window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+  if (!API_BASE_URL) {
+    return "/api";
+  }
+
+  if (!isBrowserLocal && isLocalBackendUrl(API_BASE_URL)) {
+    // Production browser must never call localhost; use Next.js proxy route.
+    return "/api";
+  }
+
+  return API_BASE_URL;
+}
+
+const dashboardFallback: DashboardPayload = {
+  weather: {
+    current: {
+      temperature: 29,
+      humidity: 58,
+      windSpeed: 4,
+      rainProbability: 22,
+      icon: "01d",
+      description: "Fallback weather",
+    },
+    forecast: Array.from({ length: 7 }).map((_, index) => ({
+      label: `D${index + 1}`,
+      temperature: 29 + (index % 3) - 1,
+      rainProbability: 20 + index * 3,
+      humidity: 56 + (index % 4),
+    })),
+  },
+  soil: {
+    ph: 6.8,
+    nitrogen: 0.18,
+    organicCarbon: 0.95,
+    soilType: "Balanced",
+    recommendation: "Keep moisture and nutrients balanced.",
+    healthScore: 72,
+  },
+  market: {
+    markets: [],
+    bestMarket: "--",
+    recommendation: "Live mandi recommendation will appear shortly.",
+    signal: "SELL",
+    trend: [],
+  },
+  crops: {
+    recommendations: [],
+    summary: "Crop intelligence is warming up.",
+  },
+  finance: {
+    schemes: [],
+    advice: "Finance intelligence is warming up.",
+  },
+  insights: ["Dashboard is running in safe mode while live APIs sync."],
+};
+
+function toNumber(value: unknown, fallback = 0): number {
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeDashboardPayload(raw: unknown): DashboardPayload {
+  if (!raw || typeof raw !== "object") {
+    return dashboardFallback;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const weatherRaw = (obj.weather as Record<string, unknown> | undefined) ?? {};
+  const weatherCurrentRaw =
+    (weatherRaw.current as Record<string, unknown> | undefined) ?? weatherRaw;
+  const soilRaw = (obj.soil as Record<string, unknown> | undefined) ?? {};
+  const marketRaw = (obj.market as Record<string, unknown> | undefined) ?? {};
+  const cropsRaw = (obj.crops as Record<string, unknown> | undefined) ?? {};
+  const financeRaw = (obj.finance as Record<string, unknown> | undefined) ?? {};
+
+  const normalized: DashboardPayload = {
+    weather: {
+      current: {
+        temperature: toNumber(weatherCurrentRaw.temperature, dashboardFallback.weather.current.temperature),
+        humidity: toNumber(weatherCurrentRaw.humidity, dashboardFallback.weather.current.humidity),
+        windSpeed: toNumber(weatherCurrentRaw.windSpeed, dashboardFallback.weather.current.windSpeed),
+        rainProbability: toNumber(weatherCurrentRaw.rainProbability, dashboardFallback.weather.current.rainProbability),
+        icon: typeof weatherCurrentRaw.icon === "string" ? weatherCurrentRaw.icon : dashboardFallback.weather.current.icon,
+        description:
+          typeof weatherCurrentRaw.description === "string"
+            ? weatherCurrentRaw.description
+            : dashboardFallback.weather.current.description,
+      },
+      forecast: Array.isArray(weatherRaw.forecast)
+        ? weatherRaw.forecast.map((point, index) => {
+            const p = (point as Record<string, unknown>) ?? {};
+            return {
+              label: typeof p.label === "string" ? p.label : `D${index + 1}`,
+              temperature: toNumber(p.temperature, dashboardFallback.weather.current.temperature),
+              rainProbability: toNumber(p.rainProbability, dashboardFallback.weather.current.rainProbability),
+              humidity: toNumber(p.humidity, dashboardFallback.weather.current.humidity),
+            };
+          })
+        : dashboardFallback.weather.forecast,
+    },
+    soil: {
+      ph: toNumber(soilRaw.ph, dashboardFallback.soil.ph),
+      nitrogen: toNumber(soilRaw.nitrogen, dashboardFallback.soil.nitrogen),
+      organicCarbon: toNumber(soilRaw.organicCarbon, dashboardFallback.soil.organicCarbon),
+      soilType: typeof soilRaw.soilType === "string" ? soilRaw.soilType : dashboardFallback.soil.soilType,
+      recommendation:
+        typeof soilRaw.recommendation === "string"
+          ? soilRaw.recommendation
+          : dashboardFallback.soil.recommendation,
+      healthScore: toNumber(soilRaw.healthScore, dashboardFallback.soil.healthScore),
+    },
+    market: {
+      markets: Array.isArray(marketRaw.markets)
+        ? marketRaw.markets.map((entry) => {
+            const m = (entry as Record<string, unknown>) ?? {};
+            return {
+              mandi: typeof m.mandi === "string" ? m.mandi : "--",
+              modalPrice: toNumber(m.modalPrice),
+              netProfit: toNumber(m.netProfit),
+              distanceKm: toNumber(m.distanceKm),
+              district: typeof m.district === "string" ? m.district : "--",
+              state: typeof m.state === "string" ? m.state : "--",
+            };
+          })
+        : [],
+      bestMarket: typeof marketRaw.bestMarket === "string" ? marketRaw.bestMarket : "--",
+      recommendation:
+        typeof marketRaw.recommendation === "string"
+          ? marketRaw.recommendation
+          : dashboardFallback.market.recommendation,
+      signal: marketRaw.signal === "HOLD" ? "HOLD" : "SELL",
+      trend: Array.isArray(marketRaw.trend)
+        ? marketRaw.trend.map((entry) => {
+            const t = (entry as Record<string, unknown>) ?? {};
+            return {
+              date: typeof t.date === "string" ? t.date : "-",
+              price: toNumber(t.price),
+              arrivals: toNumber(t.arrivals),
+            };
+          })
+        : [],
+    },
+    crops: {
+      recommendations: Array.isArray(cropsRaw.recommendations)
+        ? cropsRaw.recommendations.map((entry) => {
+            const c = (entry as Record<string, unknown>) ?? {};
+            return {
+              crop: typeof c.crop === "string" ? c.crop : "-",
+              season: typeof c.season === "string" ? c.season : "-",
+              reasoning: typeof c.reasoning === "string" ? c.reasoning : "No reasoning provided.",
+            };
+          })
+        : [],
+      summary: typeof cropsRaw.summary === "string" ? cropsRaw.summary : dashboardFallback.crops.summary,
+    },
+    finance: {
+      schemes: Array.isArray(financeRaw.schemes)
+        ? financeRaw.schemes.map((entry) => {
+            const s = (entry as Record<string, unknown>) ?? {};
+            return {
+              name: typeof s.name === "string" ? s.name : "-",
+              benefit: typeof s.benefit === "string" ? s.benefit : "-",
+              amountINR: toNumber(s.amountINR),
+              eligibility: typeof s.eligibility === "string" ? s.eligibility : "-",
+            };
+          })
+        : [],
+      advice: typeof financeRaw.advice === "string" ? financeRaw.advice : dashboardFallback.finance.advice,
+    },
+    insights: Array.isArray(obj.insights)
+      ? obj.insights.map((line) => String(line)).filter(Boolean)
+      : dashboardFallback.insights,
+  };
+
+  if (!normalized.weather.forecast.length) {
+    normalized.weather.forecast = dashboardFallback.weather.forecast;
+  }
+
+  return normalized;
+}
+
+const fetcher = async (url: string): Promise<DashboardPayload> => {
+  const response = await fetch(url, { cache: "no-store" });
+  const parsed = await response.json().catch(() => ({}));
+  const normalized = normalizeDashboardPayload(parsed);
+
+  if (!response.ok) {
+    return {
+      ...normalized,
+      warning:
+        (parsed as { error?: string })?.error ??
+        "Live dashboard data temporarily unavailable. Showing fallback intelligence.",
+    };
+  }
+
+  return normalized;
 };
 
 const featureLinks = [
@@ -162,6 +378,7 @@ export default function HomePage() {
   const router = useRouter();
   const { user, profile, loading: userLoading } = useUser();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const dashboardApiBase = useMemo(() => resolveDashboardBaseUrl(), []);
 
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
   const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
@@ -175,10 +392,10 @@ export default function HomePage() {
 
   const dashboardKey =
     Number.isFinite(effectiveLatitude) && Number.isFinite(effectiveLongitude)
-      ? `${API_BASE_URL}/dashboard/data?latitude=${effectiveLatitude}&longitude=${effectiveLongitude}&placeName=${encodeURIComponent(effectivePlaceName || "")}`
+      ? `${dashboardApiBase}/dashboard/data?latitude=${effectiveLatitude}&longitude=${effectiveLongitude}&placeName=${encodeURIComponent(effectivePlaceName || "")}`
       : null;
 
-  const { data, error, isLoading, isValidating } = useSWR<DashboardPayload>(dashboardKey, fetcher, {
+  const { data, isLoading, isValidating } = useSWR<DashboardPayload>(dashboardKey, fetcher, {
     refreshInterval: 10 * 60 * 1000,
     revalidateOnFocus: false,
     keepPreviousData: true,
@@ -195,7 +412,7 @@ export default function HomePage() {
       place: effectivePlaceName,
       key: dashboardKey,
     });
-  }, [dashboardKey, effectiveLatitude, effectiveLongitude, effectivePlaceName]);
+  }, [dashboardApiBase, dashboardKey, effectiveLatitude, effectiveLongitude, effectivePlaceName]);
 
   const overview = useMemo(() => {
     const avgMandiPrice = average(data?.market.markets.map((item) => item.modalPrice) ?? []);
@@ -254,9 +471,9 @@ export default function HomePage() {
           </div>
         )}
 
-        {error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {(error as Error).message}
+        {data?.warning ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            {data.warning}
           </div>
         ) : null}
 
@@ -481,6 +698,56 @@ export default function HomePage() {
             <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
               <p className="font-semibold">Best Mandi Recommendation</p>
               <p className="mt-2">{data?.market.recommendation ?? "Market recommendation will appear after live data loads."}</p>
+            </div>
+          </motion.article>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-2">
+          <motion.article
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="rounded-3xl border border-lime-100 bg-white/85 p-6 shadow-[0_15px_45px_rgba(101,163,13,0.08)]"
+          >
+            <h2 className="text-xl font-semibold text-slate-900">Crop Intelligence</h2>
+            <p className="mt-2 text-sm text-slate-600">{data?.crops.summary ?? "Crop intelligence is loading."}</p>
+
+            <div className="mt-4 space-y-3">
+              {(data?.crops.recommendations ?? []).slice(0, 3).map((item, index) => (
+                <div key={`${item.crop}-${index}`} className="rounded-2xl border border-lime-100 bg-lime-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-lime-900">{item.crop} ({item.season})</p>
+                  <p className="mt-1 text-xs text-lime-800">{item.reasoning}</p>
+                </div>
+              ))}
+              {(data?.crops.recommendations?.length ?? 0) === 0 ? (
+                <div className="rounded-2xl border border-lime-100 bg-lime-50 px-4 py-3 text-sm text-lime-900">
+                  Recommendations are being generated for your location.
+                </div>
+              ) : null}
+            </div>
+          </motion.article>
+
+          <motion.article
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.05 }}
+            className="rounded-3xl border border-cyan-100 bg-white/85 p-6 shadow-[0_15px_45px_rgba(14,116,144,0.08)]"
+          >
+            <h2 className="text-xl font-semibold text-slate-900">Finance Intelligence</h2>
+            <p className="mt-2 text-sm text-slate-600">{data?.finance.advice ?? "Finance intelligence is loading."}</p>
+
+            <div className="mt-4 space-y-3">
+              {(data?.finance.schemes ?? []).slice(0, 3).map((scheme, index) => (
+                <div key={`${scheme.name}-${index}`} className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-cyan-900">{scheme.name} - {formatCurrency(scheme.amountINR)}</p>
+                  <p className="mt-1 text-xs text-cyan-800">{scheme.benefit}</p>
+                </div>
+              ))}
+              {(data?.finance.schemes?.length ?? 0) === 0 ? (
+                <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+                  Schemes will appear here after the advisory service responds.
+                </div>
+              ) : null}
             </div>
           </motion.article>
         </section>
