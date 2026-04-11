@@ -34,6 +34,13 @@ Many farmers do not have instant access to reliable agronomy guidance, weather-i
 root/
   frontend/
   backend/
+      src/
+         agents/
+         orchestrator/
+         services/
+         routes/
+         utils/
+         index.ts
   README.md
 ```
 
@@ -56,9 +63,9 @@ root/
    - `cd frontend`
    - `npm run dev`
 
-## Initial API Endpoints
+## Current API Endpoints
 
 - `GET /health` -> returns `OK`
-- `POST /chat` -> returns a dummy chat response
+- `POST /chat` -> routes through orchestrator with placeholder weather/crop/market/finance agents
 
 This is the initial commit-ready baseline for FarmEase.

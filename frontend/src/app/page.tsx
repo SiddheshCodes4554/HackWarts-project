@@ -7,11 +7,23 @@ type Message = {
   content: string;
 };
 
+type AgentResult = {
+  agent: "weather" | "crop" | "market" | "finance";
+  insight: string;
+  confidence: number;
+};
+
+type ChatApiResponse = {
+  reply?: string;
+  agentResults?: AgentResult[];
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 
 export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [agentResults, setAgentResults] = useState<AgentResult[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -50,7 +62,8 @@ export default function Home() {
         throw new Error("Chat request failed");
       }
 
-      const data = (await response.json()) as { reply?: string };
+      const data = (await response.json()) as ChatApiResponse;
+      setAgentResults(data.agentResults ?? []);
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -60,6 +73,7 @@ export default function Home() {
         },
       ]);
     } catch {
+      setAgentResults([]);
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -96,6 +110,34 @@ export default function Home() {
             <span className="text-xs font-medium text-slate-500">Backend: {API_BASE_URL}</span>
           </div>
 
+          <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { key: "weather", label: "Weather Agent" },
+              { key: "crop", label: "Crop Agent" },
+              { key: "market", label: "Market Agent" },
+              { key: "finance", label: "Finance Agent" },
+            ].map((agentCard) => {
+              const result = agentResults.find((item) => item.agent === agentCard.key);
+              const isActive = Boolean(result);
+
+              return (
+                <div
+                  key={agentCard.key}
+                  className={`rounded-xl border px-3 py-2 text-xs transition ${
+                    isActive
+                      ? "border-lime-300 bg-lime-50 text-lime-900"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                  }`}
+                >
+                  <p className="font-semibold">{agentCard.label}</p>
+                  <p className="mt-1 line-clamp-2 leading-5">
+                    {result ? result.insight : loading ? "Analyzing..." : "Waiting for query"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
           <div className="mb-4 h-[420px] overflow-y-auto rounded-2xl border border-lime-100 bg-lime-50/45 p-3 sm:p-4">
             {hasMessages ? (
               <div className="space-y-3">
@@ -111,6 +153,14 @@ export default function Home() {
                     {message.content}
                   </article>
                 ))}
+                {loading && (
+                  <article className="mr-auto inline-flex items-center gap-2 rounded-2xl border border-lime-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-lime-500" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-lime-500 [animation-delay:120ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-lime-500 [animation-delay:240ms]" />
+                    Agents are synthesizing your answer...
+                  </article>
+                )}
               </div>
             ) : (
               <p className="text-sm text-slate-500">Start a conversation with FarmEase.</p>

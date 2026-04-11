@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
+import { chatRouter } from "./routes/chat";
 
 dotenv.config();
 
@@ -14,14 +15,13 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).send("OK");
 });
 
-app.post("/chat", (req: Request, res: Response) => {
-  const userMessage = typeof req.body?.message === "string" ? req.body.message : "";
+app.use(chatRouter);
 
-  res.status(200).json({
-    reply: userMessage
-      ? `Dummy response: Received your message \"${userMessage}\". Agentic workflow coming soon.`
-      : "Dummy response: FarmEase backend is ready. Multi-agent response pipeline coming soon.",
-    timestamp: new Date().toISOString(),
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Unhandled API error", error);
+
+  res.status(500).json({
+    error: "Internal server error",
   });
 });
 
