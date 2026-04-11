@@ -8,7 +8,7 @@ import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, loading: userLoading } = useUser();
+  const { user, loading: userLoading, refreshProfile } = useUser();
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
   const [latitude, setLatitude] = useState<number>(0);
@@ -88,9 +88,10 @@ export default function OnboardingPage() {
     }
 
     try {
-      const { error: updateError } = await supabase
+      const { error: saveError } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
           name,
           location_name: locationName,
           latitude,
@@ -99,12 +100,13 @@ export default function OnboardingPage() {
           primary_crop: primaryCrop,
           language,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
+        });
 
-      if (updateError) throw updateError;
+      if (saveError) throw saveError;
 
-      router.push('/');
+      await refreshProfile();
+
+      router.push('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {

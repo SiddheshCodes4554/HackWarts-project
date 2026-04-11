@@ -28,7 +28,6 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
 
     return `${city}, ${state}`;
   } catch (error) {
-    console.error("reverseGeocode fallback", error);
     return "Nagpur, Maharashtra";
   }
 }

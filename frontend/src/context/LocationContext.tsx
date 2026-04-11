@@ -79,7 +79,6 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
       setLocation(lat, lon, placeName);
     } catch (error) {
-      console.error("GPS detection fallback", error);
       setLocation(DEFAULT_LOCATION.latitude as number, DEFAULT_LOCATION.longitude as number, DEFAULT_LOCATION.placeName);
     } finally {
       setIsDetecting(false);
