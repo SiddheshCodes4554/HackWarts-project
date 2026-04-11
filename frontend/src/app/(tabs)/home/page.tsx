@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, CloudRain, DollarSign, Leaf, Seedling } from "lucide-react";
+import { ArrowRight, BarChart3, CloudRain, DollarSign, Leaf } from "lucide-react";
 
 const features = [
   {

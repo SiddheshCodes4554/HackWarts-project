@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Microphone, SendHorizonal, Sparkles } from "lucide-react";
+import { Mic, SendHorizonal, Sparkles } from "lucide-react";
 
 type Message = {
   role: "user" | "assistant";
@@ -112,7 +112,7 @@ export default function AssistantPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            )}
 
             <div ref={messagesEndRef} />
           </div>
@@ -124,7 +124,7 @@ export default function AssistantPage() {
               type="button"
               className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100"
             >
-              <Microphone className="h-5 w-5" />
+              <Mic className="h-5 w-5" />
             </button>
             <input
               value={input}
