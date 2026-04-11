@@ -66,7 +66,7 @@ function DraggableMarker({
 
 type MapSelectorProps = {
   onDone?: () => void;
-  onLocationConfirmed?: (location: StructuredLocation) => void;
+  onLocationConfirmed?: (location: StructuredLocation) => Promise<void> | void;
 };
 
 export default function MapSelector({ onDone, onLocationConfirmed }: MapSelectorProps) {
@@ -140,7 +140,7 @@ export default function MapSelector({ onDone, onLocationConfirmed }: MapSelector
       const [lat, lon] = selected;
       const resolved = selectedAddress ?? (await reverseGeocodeStructured(lat, lon));
       setLocation(lat, lon, resolved.full_address);
-      onLocationConfirmed?.(resolved);
+      await onLocationConfirmed?.(resolved);
       onDone?.();
     } catch {
       setError("Unable to confirm location. Please retry.");

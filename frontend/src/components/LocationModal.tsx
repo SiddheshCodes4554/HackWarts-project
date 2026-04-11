@@ -9,19 +9,13 @@ import type { StructuredLocation } from "../utils/reverseGeocode";
 
 const MapSelector = dynamic(() => import("./MapSelector"), { ssr: false });
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  ""
-).replace(/\/$/, "");
-
 type LocationModalProps = {
   isOpen: boolean;
   onClose: () => void;
 };
 
 export function LocationModal({ isOpen, onClose }: LocationModalProps) {
-  const { user, refreshProfile } = useUser();
+  const { user, updateProfile, refreshProfile } = useUser();
   const [error, setError] = useState("");
 
   const persistLocation = async (location: StructuredLocation) => {
@@ -32,26 +26,11 @@ export function LocationModal({ isOpen, onClose }: LocationModalProps) {
     setError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/user/location`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          lat: location.lat,
-          lon: location.lon,
-          district: location.district,
-          state: location.state,
-          village: location.village,
-          full_address: location.full_address,
-        }),
+      await updateProfile({
+        location_name: location.full_address,
+        latitude: location.lat,
+        longitude: location.lon,
       });
-
-      if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "Unable to persist location");
-      }
 
       await refreshProfile();
       emitLocationUpdatedToast();
