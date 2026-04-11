@@ -26,7 +26,7 @@ const features = [
   {
     title: "Crop Help",
     description: "Tailored guidance for your field and crop cycle.",
-    href: "/crop-help",
+    href: "/crop-advisory",
     icon: Leaf,
   },
   {

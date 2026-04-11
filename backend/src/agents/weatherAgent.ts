@@ -41,6 +41,7 @@ function fallbackWeatherAdvisory(): WeatherAdvisory {
   return {
     temperature: 28,
     rainfall: 0,
+    humidity: 60,
     advice:
       "Live weather feed is temporarily unavailable. Use local field conditions before making irrigation decisions.",
   };
@@ -83,6 +84,7 @@ export async function getWeatherAdvisory(
     return {
       temperature: roundToOneDecimal(temperature),
       rainfall: roundToOneDecimal(rainfall),
+      humidity: roundToOneDecimal(humidity),
       advice: buildAdvice(temperature, rainfall, humidity),
     };
   } catch (error) {
@@ -100,13 +102,14 @@ export async function weatherAgent(context: AgentContext): Promise<AgentResult> 
 
   return {
     agent: "weather",
-    insight: `Temperature ${advisory.temperature}°C, rainfall ${advisory.rainfall} mm. ${advisory.advice}`,
+    insight: `Temperature ${advisory.temperature}°C, rainfall ${advisory.rainfall} mm, humidity ${advisory.humidity}%. ${advisory.advice}`,
     confidence: 0.86,
     metadata: {
       locale: context.locale ?? "global",
       source: "open-meteo",
       temperature: advisory.temperature,
       rainfall: advisory.rainfall,
+      humidity: advisory.humidity,
       latitude: roundToOneDecimal(latitude),
       longitude: roundToOneDecimal(longitude),
     },

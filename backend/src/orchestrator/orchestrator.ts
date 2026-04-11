@@ -1,9 +1,11 @@
-import { cropAgent } from "../agents/cropAgent";
+import { generateCropAdvice } from "../agents/cropAgent";
 import { financeAgent } from "../agents/financeAgent";
 import { marketAgent } from "../agents/marketAgent";
 import { weatherAgent } from "../agents/weatherAgent";
 import { detectIntent, generateResponse } from "../services/groqService";
+import { getSoilProfile } from "../services/soilService";
 import {
+  CropAdviceResult,
   AgentResult,
   AgentContext,
   ChatRequestPayload,
@@ -14,6 +16,9 @@ type QueryLocation = {
   latitude?: number;
   longitude?: number;
   placeName?: string;
+  crop?: string;
+  disease?: string;
+  language?: string;
 };
 
 function toStructuredAgentOutput(result?: AgentResult): Record<string, unknown> {
@@ -47,23 +52,57 @@ export async function handleQuery(
 
   let weatherResult: AgentResult | undefined;
   let cropResult: AgentResult | undefined;
+  let cropAdvice: CropAdviceResult | undefined;
   let marketResult: AgentResult | undefined;
   let financeResult: AgentResult | undefined;
   let finalMessage = "";
 
   if (intentResult.intent === "crop_advice") {
-    weatherResult = await weatherAgent(context);
-    const weatherTemperature =
-      typeof weatherResult.metadata?.temperature === "number"
-        ? weatherResult.metadata.temperature
-        : 30;
-    const weatherRainfall =
-      typeof weatherResult.metadata?.rainfall === "number" ? weatherResult.metadata.rainfall : 0;
+    const [weatherData, soilData] = await Promise.all([
+      weatherAgent(context),
+      getSoilProfile(
+        Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
+        Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
+      ),
+    ]);
 
-    cropResult = await cropAgent(context, {
-      temperature: weatherTemperature,
-      rainfall: weatherRainfall,
+    weatherResult = weatherData;
+    const selectedCrop = (location?.crop ?? intentResult.entities.crop)?.trim() || undefined;
+
+    cropAdvice = await generateCropAdvice({
+      location: {
+        lat: Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
+        lon: Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
+        placeName: location?.placeName ?? context.locale ?? "Nagpur, Maharashtra",
+      },
+      weather: {
+        temperature:
+          typeof weatherData.metadata?.temperature === "number" ? weatherData.metadata.temperature : 30,
+        rainfall: typeof weatherData.metadata?.rainfall === "number" ? weatherData.metadata.rainfall : 0,
+        humidity: typeof weatherData.metadata?.humidity === "number" ? weatherData.metadata.humidity : 60,
+      },
+      soil: soilData,
+      crop: selectedCrop,
+      disease: location?.disease ?? undefined,
+      language: location?.language ?? "English",
+      query: cleanQuery,
     });
+
+    cropResult = {
+      agent: "crop",
+      insight: `${cropAdvice.disease}. ${cropAdvice.root_cause}`,
+      confidence: Math.max(0, Math.min(1, cropAdvice.confidence / 100)),
+      metadata: {
+        disease: cropAdvice.disease,
+        confidence: cropAdvice.confidence,
+        root_cause: cropAdvice.root_cause,
+        treatment: cropAdvice.treatment.join(" | "),
+        prevention: cropAdvice.prevention.join(" | "),
+        crop_recommendation: cropAdvice.crop_recommendation.join(" | "),
+        warnings: cropAdvice.warnings.join(" | "),
+        context: JSON.stringify(cropAdvice.context),
+      },
+    };
   } else if (intentResult.intent === "market_price") {
     marketResult = await marketAgent(context);
   } else if (intentResult.intent === "financial_help") {
@@ -73,13 +112,15 @@ export async function handleQuery(
   }
 
   const weather = toStructuredAgentOutput(weatherResult);
-  const crops = toStructuredAgentOutput(cropResult);
+  const crops = cropAdvice ?? toStructuredAgentOutput(cropResult);
   const market = toStructuredAgentOutput(marketResult);
   const finance = toStructuredAgentOutput(financeResult);
 
   if (intentResult.intent === "general_query") {
     const general = await generateResponse(cleanQuery);
     finalMessage = general.message;
+  } else if (intentResult.intent === "crop_advice" && cropAdvice) {
+    finalMessage = cropAdvice.summary;
   } else {
     const combined = await generateResponse(
       [
@@ -124,5 +165,8 @@ export async function orchestrateChat(
     latitude: payload.latitude,
     longitude: payload.longitude,
     placeName: payload.locale,
+    crop: payload.crop,
+    disease: payload.disease,
+    language: payload.language,
   });
 }

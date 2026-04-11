@@ -1,24 +1,16 @@
-import { AgentContext, AgentResult } from "../utils/types";
+import { buildCropContext } from "../services/cropContextBuilder";
+import {
+  CropAdviceInput,
+  CropAdviceResult,
+  CropWeather,
+  SoilProfile,
+} from "../utils/types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const CROP_ADVICE_MODEL = process.env.GROQ_CROP_MODEL ?? "llama-3.3-70b-versatile";
-const CROP_TIMEOUT_MS = 7000;
+const CROP_ADVICE_MODEL = "llama3-70b-8192";
+const CROP_TIMEOUT_MS = 9000;
 
-type SeasonType = "rainy" | "winter" | "summer";
-
-type CropAdviceInput = {
-  location: { lat: number; lon: number; placeName: string };
-  weather: { temperature: number; rainfall: number };
-  season?: string;
-};
-
-type CropAdviceOutput = {
-  crops: string[];
-  reasoning: string;
-  season: string;
-};
-
-type GroqCropPayload = {
+type GroqCropResponse = {
   choices?: Array<{
     message?: {
       content?: string;
@@ -29,86 +21,119 @@ type GroqCropPayload = {
   };
 };
 
-const RULE_CROP_MAP: Record<SeasonType, string[]> = {
-  rainy: ["rice", "maize", "cotton"],
-  winter: ["wheat", "mustard", "barley"],
-  summer: ["millets", "pulses", "groundnut"],
+type DiseaseInferenceResult = {
+  disease_name: string;
+  confidence: number;
 };
 
-function determineSeason(temperature: number, rainfall: number): SeasonType {
-  if (rainfall > 50) {
-    return "rainy";
+type CropAdviceModelResult = {
+  disease: string;
+  confidence: number;
+  root_cause: string;
+  treatment: string[];
+  prevention: string[];
+  crop_recommendation: string[];
+};
+
+function sanitizeText(value: unknown, fallback = ""): string {
+  if (typeof value !== "string") {
+    return fallback;
   }
 
-  if (temperature < 20) {
-    return "winter";
-  }
-
-  return "summer";
+  return value.trim() || fallback;
 }
 
-function parseSeasonFromText(value?: string): SeasonType | undefined {
-  if (!value) {
-    return undefined;
+function parseNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
   }
 
-  const normalized = value.toLowerCase();
-  if (normalized.includes("rain") || normalized.includes("monsoon") || normalized.includes("kharif")) {
-    return "rainy";
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
   }
 
-  if (normalized.includes("winter") || normalized.includes("rabi")) {
-    return "winter";
-  }
-
-  if (normalized.includes("summer") || normalized.includes("zaid")) {
-    return "summer";
-  }
-
-  return undefined;
+  return fallback;
 }
 
-function parseCropAdviceJson(raw: string): Partial<CropAdviceOutput> | null {
+function normalizeList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeText(entry)).filter(Boolean).slice(0, 5);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/\n|\r|;|\.|\d+\)/)
+      .map((entry) => entry.replace(/^[-*\s]+/, "").trim())
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+
+  return [];
+}
+
+function parseJsonObject<T>(raw: string): T | null {
   const trimmed = raw.trim();
 
-  const parseObj = (jsonValue: string) => {
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const fencedMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (!fencedMatch) {
+      return null;
+    }
+
     try {
-      return JSON.parse(jsonValue) as Partial<CropAdviceOutput>;
+      return JSON.parse(fencedMatch[0]) as T;
     } catch {
       return null;
     }
-  };
-
-  const direct = parseObj(trimmed);
-  if (direct) {
-    return direct;
   }
-
-  const objectMatch = trimmed.match(/\{[\s\S]*\}/);
-  if (!objectMatch) {
-    return null;
-  }
-
-  return parseObj(objectMatch[0]);
 }
 
-function fallbackCropAdvice(input: CropAdviceInput, season: SeasonType): CropAdviceOutput {
-  const crops = RULE_CROP_MAP[season];
-  return {
-    crops,
-    reasoning: `Based on ${input.location.placeName} weather (${input.weather.temperature}°C, ${input.weather.rainfall} mm rainfall), ${season} crops are recommended for stable field performance.`,
-    season,
-  };
+function buildCropPrompt(
+  input: CropAdviceInput,
+  context: ReturnType<typeof buildCropContext>,
+  diseaseName: string,
+  diseaseConfidence: number,
+): string {
+  const cropName = input.crop?.trim() || "unspecified crop";
+  const language = input.language?.trim() || "English";
+
+  return [
+    "You are an expert agronomist specialising in Indian smallholder farming.",
+    "",
+    `Farmer: ${context.district}, ${context.state}`,
+    `Crop: ${cropName}`,
+    `Stage: ${context.growth_stage}`,
+    `Season: ${context.season}`,
+    "",
+    `Weather (7d): ${context.weather_summary}`,
+    `Soil: ${context.soil_type}`,
+    "",
+    `Disease model output: ${diseaseName} (confidence: ${diseaseConfidence}%)`,
+    "",
+    `Respond in ${language}.`,
+    "",
+    "Format:",
+    "1) Disease name",
+    "2) Root cause",
+    "3) Treatment (3 steps, cheapest first)",
+    "4) Prevention",
+    "",
+    "Use simple language (6th-grade level).",
+    "Avoid technical jargon unless explained.",
+    "",
+    "Return valid JSON with keys: disease, confidence, root_cause, treatment, prevention, crop_recommendation.",
+  ].join("\n");
 }
 
-export async function getCropAdvice(input: CropAdviceInput): Promise<CropAdviceOutput> {
-  const inferredSeason =
-    parseSeasonFromText(input.season) ?? determineSeason(input.weather.temperature, input.weather.rainfall);
-  const fallback = fallbackCropAdvice(input, inferredSeason);
-
+async function groqCompletion(prompt: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return fallback;
+    throw new Error("GROQ_API_KEY is required for crop advisory");
   }
 
   const controller = new AbortController();
@@ -124,82 +149,248 @@ export async function getCropAdvice(input: CropAdviceInput): Promise<CropAdviceO
       body: JSON.stringify({
         model: CROP_ADVICE_MODEL,
         temperature: 0.2,
-        max_tokens: 220,
+        max_tokens: 500,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content:
-              "You are an agricultural expert.\n\nBased on:\nWeather: {weather}\nSeason: {season}\nLocation: {placeName}\n\nSuggest best crops for farmer.\n\nReturn JSON:\n{\n  crops: [],\n  reasoning: \"\"\n}",
+            content: "Return only valid JSON.",
           },
           {
             role: "user",
-            content: `Weather: ${JSON.stringify(input.weather)}\nSeason: ${inferredSeason}\nLocation: ${input.location.placeName}`,
+            content: prompt,
           },
         ],
       }),
       signal: controller.signal,
     });
 
-    const payload = (await response.json().catch(() => ({}))) as GroqCropPayload;
+    const payload = (await response.json().catch(() => ({}))) as GroqCropResponse;
     if (!response.ok) {
       throw new Error(payload.error?.message ?? `Groq crop API error: HTTP ${response.status}`);
     }
 
-    const modelContent = payload.choices?.[0]?.message?.content;
-    if (!modelContent) {
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
       throw new Error("Groq crop response was empty");
     }
 
-    const parsed = parseCropAdviceJson(modelContent);
-    if (!parsed || !Array.isArray(parsed.crops) || typeof parsed.reasoning !== "string") {
-      throw new Error("Groq crop response JSON invalid");
-    }
-
-    const sanitizedCrops = parsed.crops
-      .map((crop) => String(crop).trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 5);
-
-    if (sanitizedCrops.length === 0) {
-      return fallback;
-    }
-
-    return {
-      crops: sanitizedCrops,
-      reasoning: parsed.reasoning.trim() || fallback.reasoning,
-      season: inferredSeason,
-    };
-  } catch (error) {
-    console.error("getCropAdvice fallback", error);
-    return fallback;
+    return content;
   } finally {
     clearTimeout(timeoutHandle);
   }
 }
 
-export async function cropAgent(
-  context: AgentContext,
-  weather: { temperature: number; rainfall: number } = { temperature: 30, rainfall: 0 },
-): Promise<AgentResult> {
-  const cropAdvice = await getCropAdvice({
-    location: {
-      lat: context.latitude ?? 21.1458,
-      lon: context.longitude ?? 79.0882,
-      placeName: context.locale ?? "Nagpur, Maharashtra",
-    },
-    weather,
-    season: context.message,
-  });
+export async function inferDisease(query: string): Promise<DiseaseInferenceResult> {
+  const cleanedQuery = query.trim();
+  if (!cleanedQuery) {
+    return {
+      disease_name: "Unknown condition",
+      confidence: 0,
+    };
+  }
+
+  try {
+    const responseText = await groqCompletion([
+      "You are an agricultural expert.",
+      "",
+      `From this farmer query:\n${cleanedQuery}`,
+      "",
+      "Identify:",
+      "- possible crop disease",
+      "- confidence %",
+      "",
+      "Return JSON:",
+      '{',
+      '  "disease_name": "",',
+      '  "confidence": ""',
+      '}',
+    ].join("\n"));
+
+    const parsed = parseJsonObject<Partial<DiseaseInferenceResult>>(responseText);
+    const diseaseName = sanitizeText(parsed?.disease_name, "Unknown condition");
+    const confidence = Math.max(0, Math.min(100, parseNumber(parsed?.confidence, 0)));
+
+    return {
+      disease_name: diseaseName || "Unknown condition",
+      confidence,
+    };
+  } catch (error) {
+    console.error("inferDisease fallback", error);
+    return {
+      disease_name: "Unknown condition",
+      confidence: 0,
+    };
+  }
+}
+
+function deriveWarnings(input: CropAdviceInput, context: ReturnType<typeof buildCropContext>): string[] {
+  const warnings: string[] = [];
+  const humidity = input.weather.humidity;
+  const soilType = context.soil_type.toLowerCase();
+
+  if (soilType.includes("acidic") || (input.soil.ph !== null && input.soil.ph < 6)) {
+    warnings.push("Soil is acidic. Avoid wheat and apply lime before sowing.");
+  }
+
+  if (humidity >= 75) {
+    warnings.push("High humidity can increase fungal risk. Keep leaves dry and improve air flow.");
+  }
+
+  if (input.soil.nitrogen !== null && input.soil.nitrogen < 0.05) {
+    warnings.push("Low nitrogen detected. Use a small dose of nitrogen fertilizer after soil testing.");
+  }
+
+  return warnings;
+}
+
+function applyRuleValidation(
+  advice: CropAdviceModelResult,
+  input: CropAdviceInput,
+  context: ReturnType<typeof buildCropContext>,
+): CropAdviceModelResult & { warnings: string[] } {
+  const warnings = deriveWarnings(input, context);
+  const treatment = [...advice.treatment];
+  const prevention = [...advice.prevention];
+  let cropRecommendation = [...advice.crop_recommendation];
+
+  if (context.soil_type.toLowerCase().includes("acidic") || (input.soil.ph !== null && input.soil.ph < 6)) {
+    const limeStep = "Apply agricultural lime as per local soil test recommendation.";
+    if (!treatment.some((step) => step.toLowerCase().includes("lime"))) {
+      treatment.unshift(limeStep);
+    }
+    cropRecommendation = cropRecommendation.filter((crop) => crop.toLowerCase() !== "wheat");
+  }
+
+  if (input.weather.humidity >= 75) {
+    const fungalStep = "Watch for fungal spots and spray only if symptoms spread quickly.";
+    if (!prevention.some((step) => step.toLowerCase().includes("fungal"))) {
+      prevention.push(fungalStep);
+    }
+  }
+
+  if (input.soil.nitrogen !== null && input.soil.nitrogen < 0.05) {
+    const fertilizerStep = "Add a balanced nitrogen fertilizer in small doses after irrigation.";
+    if (!treatment.some((step) => step.toLowerCase().includes("nitrogen"))) {
+      treatment.push(fertilizerStep);
+    }
+  }
 
   return {
-    agent: "crop",
-    insight: `Recommended crops: ${cropAdvice.crops.join(", ")}. ${cropAdvice.reasoning}`,
-    confidence: 0.84,
-    metadata: {
-      locale: context.locale ?? "global",
-      source: "groq+rules",
-      season: cropAdvice.season,
-    },
+    ...advice,
+    treatment: treatment.slice(0, 3),
+    prevention: prevention.slice(0, 4),
+    crop_recommendation: cropRecommendation.slice(0, 5),
+    warnings,
   };
+}
+
+function fallbackCropAdvice(
+  input: CropAdviceInput,
+  context: ReturnType<typeof buildCropContext>,
+  diseaseName: string,
+  diseaseConfidence: number,
+): CropAdviceResult {
+  const warnings = deriveWarnings(input, context);
+
+  return {
+    disease: diseaseName,
+    confidence: diseaseConfidence,
+    root_cause: "The crop needs closer field inspection because the symptoms match a common stress pattern.",
+    treatment: [
+      "Remove the most affected leaves or plants.",
+      "Keep the field dry and improve air flow.",
+      "Use a local agro-dealer recommendation after checking the soil.",
+    ],
+    prevention: [
+      "Inspect the crop every 2 to 3 days.",
+      "Do not overwater the field.",
+      "Keep tools and beds clean.",
+    ],
+    crop_recommendation: input.crop ? [input.crop.trim()] : [],
+    context: {
+      season: context.season,
+      soil_type: context.soil_type,
+      weather_summary: context.weather_summary,
+    },
+    warnings,
+    summary:
+      warnings.length > 0
+        ? `${diseaseName}. ${warnings[0]}`
+        : `${diseaseName}. Start with the first treatment step and recheck the crop in 2 days.`,
+  };
+}
+
+export async function generateCropAdvice(input: CropAdviceInput): Promise<CropAdviceResult> {
+  const normalizedInput: CropAdviceInput = {
+    ...input,
+    crop: sanitizeText(input.crop, ""),
+    disease: sanitizeText(input.disease, ""),
+    language: sanitizeText(input.language, "English") || "English",
+    query: sanitizeText(input.query, ""),
+    growthStage: sanitizeText(input.growthStage, ""),
+  };
+
+  const context = buildCropContext(normalizedInput);
+  const diseaseInference = normalizedInput.disease
+    ? {
+        disease_name: normalizedInput.disease,
+        confidence: 100,
+      }
+    : await inferDisease(normalizedInput.query || `${normalizedInput.crop ?? ""} crop symptom analysis`).catch(
+        () => ({ disease_name: "Unknown condition", confidence: 0 }),
+      );
+
+  const prompt = buildCropPrompt(
+    normalizedInput,
+    context,
+    diseaseInference.disease_name,
+    diseaseInference.confidence,
+  );
+
+  try {
+    const responseText = await groqCompletion(prompt);
+    const parsed = parseJsonObject<Partial<CropAdviceModelResult>>(responseText);
+
+    if (!parsed) {
+      throw new Error("Groq crop response was not valid JSON");
+    }
+
+    const advice: CropAdviceModelResult = {
+      disease: sanitizeText(parsed.disease, diseaseInference.disease_name),
+      confidence: Math.max(
+        diseaseInference.confidence,
+        Math.min(100, parseNumber(parsed.confidence, diseaseInference.confidence)),
+      ),
+      root_cause: sanitizeText(parsed.root_cause, "The crop shows stress that needs local field observation."),
+      treatment: normalizeList(parsed.treatment).slice(0, 3),
+      prevention: normalizeList(parsed.prevention).slice(0, 4),
+      crop_recommendation: normalizeList(parsed.crop_recommendation).slice(0, 5),
+    };
+
+    if (!advice.treatment.length || !advice.prevention.length) {
+      throw new Error("Groq crop response missing treatment or prevention steps");
+    }
+
+    const validated = applyRuleValidation(advice, normalizedInput, context);
+
+    return {
+      disease: validated.disease,
+      confidence: validated.confidence,
+      root_cause: validated.root_cause,
+      treatment: validated.treatment,
+      prevention: validated.prevention,
+      crop_recommendation: validated.crop_recommendation,
+      context: {
+        season: context.season,
+        soil_type: context.soil_type,
+        weather_summary: context.weather_summary,
+      },
+      warnings: validated.warnings,
+      summary: `${validated.disease}. ${validated.root_cause}`,
+    };
+  } catch (error) {
+    console.error("generateCropAdvice fallback", error);
+    return fallbackCropAdvice(normalizedInput, context, diseaseInference.disease_name, diseaseInference.confidence);
+  }
 }
