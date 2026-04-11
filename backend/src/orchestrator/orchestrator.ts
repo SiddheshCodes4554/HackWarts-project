@@ -2,7 +2,7 @@ import { cropAgent } from "../agents/cropAgent";
 import { financeAgent } from "../agents/financeAgent";
 import { marketAgent } from "../agents/marketAgent";
 import { weatherAgent } from "../agents/weatherAgent";
-import { generateGroqResponse } from "../services/groqService";
+import { generateResponse } from "../services/groqService";
 import {
   AgentContext,
   ChatRequestPayload,
@@ -29,13 +29,17 @@ export async function orchestrateChat(
     .map((result) => `${result.agent}:${result.insight}`)
     .join(" | ");
 
-  const reply = await generateGroqResponse({
-    message: payload.message,
-    contextSummary,
-  });
+  const llmResult = await generateResponse(
+    [
+      `User query: ${payload.message}`,
+      `Agent insights: ${contextSummary}`,
+      "Return a concise and practical answer for a farmer.",
+    ].join("\n"),
+  );
 
   return {
-    reply,
+    reply: llmResult.message,
+    intent: llmResult.intent,
     agentResults,
     timestamp: context.timestamp,
   };

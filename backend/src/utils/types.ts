@@ -19,6 +19,7 @@ export type AgentResult = {
 };
 
 export type OrchestratedChatResponse = {
+  intent: string;
   reply: string;
   agentResults: AgentResult[];
   timestamp: string;

@@ -55,7 +55,7 @@ root/
    - `npm install`
 4. Configure environment variables:
    - `frontend/.env.example` -> copy to `frontend/.env.local`
-   - `backend/.env.example` -> copy to `backend/.env`
+   - `backend/.env.example` -> copy to `backend/.env` and set `GROQ_API_KEY`
 5. Run backend:
    - `cd backend`
    - `npm run dev`
@@ -67,5 +67,13 @@ root/
 
 - `GET /health` -> returns `OK`
 - `POST /chat` -> routes through orchestrator with placeholder weather/crop/market/finance agents
+
+## Groq Integration
+
+- Backend LLM provider uses Groq Chat Completions API (`llama3-70b-8192`)
+- Service implementation is in `backend/src/services/groqService.ts`
+- Run `cd backend && npm run test:groq` to execute sample query:
+   - `suggest crops for rainy season`
+   - returns structured JSON with `intent` and `message`
 
 This is the initial commit-ready baseline for FarmEase.
