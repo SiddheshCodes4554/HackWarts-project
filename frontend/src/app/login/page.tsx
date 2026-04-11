@@ -1,16 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, profile, loading: userLoading } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (userLoading) {
+      return;
+    }
+
+    if (user) {
+      router.replace(profile ? '/home' : '/onboarding');
+    }
+  }, [user, profile, userLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +38,7 @@ export default function LoginPage() {
       if (loginError) {
         setError(loginError.message);
       } else {
-        router.push('/');
+        router.replace('/');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

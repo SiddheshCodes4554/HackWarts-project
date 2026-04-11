@@ -4,7 +4,7 @@ import { useUser } from '@/context/UserContext';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut, User, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LocationUpdateToast } from '@/components/LocationUpdateToast';
 
 export default function RootLayoutClient({
@@ -12,7 +12,7 @@ export default function RootLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, profile } = useUser();
+  const { user, profile, loading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -20,11 +20,45 @@ export default function RootLayoutClient({
   // Don't show navbar on auth pages
   const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register') || pathname?.includes('/onboarding');
 
+  useEffect(() => {
+    if (loading || !pathname) {
+      return;
+    }
+
+    const isLogin = pathname === '/login';
+    const isOnboarding = pathname === '/onboarding';
+    const isRegister = pathname === '/register';
+    const isPublicAuthRoute = isLogin || isOnboarding || isRegister;
+
+    // Logged-in users should not reach login/register.
+    if (user && (isLogin || isRegister)) {
+      router.replace(profile ? '/home' : '/onboarding');
+      return;
+    }
+
+    // Onboarding is only for users without completed profile.
+    if (user && profile && isOnboarding) {
+      router.replace('/home');
+      return;
+    }
+
+    // Non-authenticated users should stay on auth routes only.
+    if (!user && !isPublicAuthRoute && pathname !== '/') {
+      router.replace('/login');
+      return;
+    }
+
+    // Authenticated users without profile should complete onboarding first.
+    if (user && !profile && !isOnboarding && !isLogin && !isRegister && pathname !== '/') {
+      router.replace('/onboarding');
+    }
+  }, [loading, pathname, profile, router, user]);
+
   const handleLogout = async () => {
     try {
       const { supabase } = await import('@/lib/supabaseClient');
       await supabase.auth.signOut();
-      router.push('/login');
+      router.replace('/login');
     } catch (err) {
       console.error('Logout error:', err);
     }

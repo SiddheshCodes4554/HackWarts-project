@@ -84,7 +84,7 @@ function splitLocation(place: string): { district: string; state: string } {
 export default function MarketPage() {
   const { latitude, longitude, placeName } = useLocation();
   const router = useRouter();
-  const { user, profile } = useUser();
+  const { user, profile, loading: userLoading } = useUser();
 
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
   const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
@@ -96,10 +96,14 @@ export default function MarketPage() {
   const apiBase = useMemo(() => getApiBase(), []);
 
   useEffect(() => {
-    if (!user || !profile) {
-      router.push(user ? "/onboarding" : "/login");
+    if (userLoading) {
+      return;
     }
-  }, [user, profile, router]);
+
+    if (!user || !profile) {
+      router.replace(user ? "/onboarding" : "/login");
+    }
+  }, [user, profile, userLoading, router]);
 
   const [selectedCommodity, setSelectedCommodity] = useState<CommodityItem | null>(null);
   const [trending, setTrending] = useState<TrendingPayload | null>(null);

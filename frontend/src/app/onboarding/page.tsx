@@ -10,7 +10,7 @@ import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, loading: userLoading, refreshProfile } = useUser();
+  const { user, profile, loading: userLoading, refreshProfile } = useUser();
   const { setLocation } = useLocation();
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
@@ -24,11 +24,20 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Redirect to login if not authenticated
-    if (!userLoading && !user) {
-      router.push('/login');
+    if (userLoading) {
+      return;
     }
-  }, [user, userLoading, router]);
+
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+
+    // Logged-in users with completed profile should not return to onboarding.
+    if (profile) {
+      router.replace('/home');
+    }
+  }, [user, profile, userLoading, router]);
 
   const requestGPSLocation = async () => {
     setGpsLoading(true);
@@ -145,7 +154,7 @@ export default function OnboardingPage() {
       setLocation(resolvedLatitude, resolvedLongitude, resolvedLocationName);
       emitLocationUpdatedToast();
 
-      router.push('/home');
+      router.replace('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {

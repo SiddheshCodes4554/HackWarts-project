@@ -386,7 +386,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!userLoading && (!user || !profile)) {
-      router.push(user ? "/onboarding" : "/login");
+      router.replace(user ? "/onboarding" : "/login");
     }
   }, [user, profile, userLoading, router]);
 

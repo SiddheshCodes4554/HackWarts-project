@@ -16,18 +16,18 @@ export default function HomeRedirect() {
 
     // If not authenticated, redirect to login
     if (!user) {
-      router.push('/login');
+      router.replace('/login');
       return;
     }
 
     // If authenticated but no profile, redirect to onboarding
     if (!profile) {
-      router.push('/onboarding');
+      router.replace('/onboarding');
       return;
     }
 
     // If fully set up, redirect to home
-    router.push('/home');
+    router.replace('/home');
   }, [user, profile, loading, router]);
 
   // Show loading state while checking auth
