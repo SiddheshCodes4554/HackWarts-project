@@ -22,12 +22,19 @@ export async function orchestrateChat(
     timestamp: new Date().toISOString(),
   };
 
-  const agentResults = await Promise.all([
-    weatherAgent(context),
-    cropAgent(context),
+  const weatherResult = await weatherAgent(context);
+  const weatherTemperature =
+    typeof weatherResult.metadata?.temperature === "number" ? weatherResult.metadata.temperature : 30;
+  const weatherRainfall =
+    typeof weatherResult.metadata?.rainfall === "number" ? weatherResult.metadata.rainfall : 0;
+
+  const [cropResult, marketResult, financeResult] = await Promise.all([
+    cropAgent(context, { temperature: weatherTemperature, rainfall: weatherRainfall }),
     marketAgent(context),
     financeAgent(context),
   ]);
+
+  const agentResults = [weatherResult, cropResult, marketResult, financeResult];
 
   const contextSummary = agentResults
     .map((result) => `${result.agent}:${result.insight}`)
