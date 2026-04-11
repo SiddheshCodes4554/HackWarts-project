@@ -12,9 +12,13 @@ import {
 export async function orchestrateChat(
   payload: ChatRequestPayload,
 ): Promise<OrchestratedChatResponse> {
+  const userMessage = (payload.message ?? payload.query ?? "").trim();
+
   const context: AgentContext = {
-    message: payload.message,
+    message: userMessage,
     locale: payload.locale,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
     timestamp: new Date().toISOString(),
   };
 
@@ -29,11 +33,11 @@ export async function orchestrateChat(
     .map((result) => `${result.agent}:${result.insight}`)
     .join(" | ");
 
-  const detectedIntent = await detectIntent(payload.message);
+  const detectedIntent = await detectIntent(userMessage);
 
   const llmResult = await generateResponse(
     [
-      `User query: ${payload.message}`,
+      `User query: ${userMessage}`,
       `Detected intent: ${detectedIntent.intent}`,
       `Detected entities: ${JSON.stringify(detectedIntent.entities)}`,
       `Agent insights: ${contextSummary}`,

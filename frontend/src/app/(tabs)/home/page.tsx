@@ -1,5 +1,26 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowRight, BarChart3, CloudRain, DollarSign, Leaf } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  BarChart3,
+  CloudRain,
+  DollarSign,
+  Leaf,
+  Loader2,
+  MapPin,
+} from "lucide-react";
+import { LocationModal } from "../../../components/LocationModal";
+import { useLocation } from "../../../context/LocationContext";
+
+type WeatherResponse = {
+  temperature: number;
+  rainfall: number;
+  advice: string;
+};
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 
 const features = [
   {
@@ -29,6 +50,55 @@ const features = [
 ];
 
 export default function HomePage() {
+  const { latitude, longitude, placeName, isDetecting } = useLocation();
+  const [weather, setWeather] = useState<WeatherResponse | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const fetchWeather = async () => {
+      setWeatherLoading(true);
+      setWeatherError("");
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/weather?latitude=${latitude}&longitude=${longitude}`,
+          { signal: controller.signal },
+        );
+        const data = (await response.json().catch(() => ({}))) as
+          | WeatherResponse
+          | { error?: string };
+
+        if (!response.ok) {
+          throw new Error((data as { error?: string }).error ?? "Unable to fetch weather");
+        }
+
+        setWeather(data as WeatherResponse);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setWeatherError("Unable to load live weather right now.");
+      } finally {
+        setWeatherLoading(false);
+      }
+    };
+
+    void fetchWeather();
+
+    return () => {
+      controller.abort();
+    };
+  }, [latitude, longitude]);
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8">
@@ -47,9 +117,72 @@ export default function HomePage() {
             </div>
             <div className="rounded-[1.75rem] bg-lime-50 px-4 py-3 text-sm font-semibold text-lime-900 shadow-sm ring-1 ring-lime-100">
               <span className="block text-xs uppercase tracking-[0.24em] text-lime-600">Location</span>
-              <span className="mt-1 block text-lg">Nagpur</span>
+              <span className="mt-1 inline-flex items-center gap-2 text-lg">
+                <MapPin className="h-4 w-4" />
+                {isDetecting ? "Detecting..." : placeName}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLocationModalOpen(true)}
+                className="mt-3 inline-flex rounded-full border border-lime-200 bg-white px-3 py-1 text-xs font-semibold text-lime-800 transition hover:bg-lime-100"
+              >
+                Change Location
+              </button>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-[0_16px_40px_rgba(20,74,116,0.08)] sm:p-8">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="inline-flex items-center gap-2 text-xl font-semibold text-slate-900">
+              <CloudRain className="h-5 w-5 text-sky-700" />
+              Weather Card
+            </h2>
+            {(weatherLoading || isDetecting) && (
+              <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Updating
+              </span>
+            )}
+          </div>
+
+          {weatherError ? (
+            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {weatherError}
+            </p>
+          ) : (
+            <>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <article className="rounded-[1.5rem] border border-amber-100 bg-amber-50 p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.15em] text-amber-700">
+                    Temperature
+                  </p>
+                  <p className="mt-3 text-3xl font-semibold text-slate-900">
+                    {weather ? `${weather.temperature}°C` : "--"}
+                  </p>
+                </article>
+                <article className="rounded-[1.5rem] border border-sky-100 bg-sky-50 p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.15em] text-sky-700">
+                    Rainfall
+                  </p>
+                  <p className="mt-3 text-3xl font-semibold text-slate-900">
+                    {weather ? `${weather.rainfall} mm` : "--"}
+                  </p>
+                </article>
+              </div>
+
+              <article className="mt-4 rounded-[1.5rem] border border-emerald-100 bg-emerald-50 p-5">
+                <p className="text-sm font-semibold uppercase tracking-[0.15em] text-emerald-700">
+                  Advice
+                </p>
+                <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-base">
+                  {weather
+                    ? weather.advice
+                    : "Weather advice will appear automatically based on your selected location."}
+                </p>
+              </article>
+            </>
+          )}
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
@@ -128,6 +261,8 @@ export default function HomePage() {
             </article>
           </div>
         </section>
+
+        <LocationModal isOpen={locationModalOpen} onClose={() => setLocationModalOpen(false)} />
       </div>
     </main>
   );

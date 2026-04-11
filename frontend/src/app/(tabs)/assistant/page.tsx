@@ -10,6 +10,7 @@ import {
   SendHorizonal,
   Sparkles,
 } from "lucide-react";
+import { useLocation } from "../../../context/LocationContext";
 
 type SectionData = Record<string, unknown>;
 
@@ -82,6 +83,7 @@ function parseStructuredCards(data: ChatApiResponse): StructuredCards | undefine
 }
 
 export default function AssistantPage() {
+  const { latitude, longitude, placeName } = useLocation();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [intent, setIntent] = useState("");
@@ -126,7 +128,14 @@ export default function AssistantPage() {
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmedMessage }),
+        body: JSON.stringify({
+          query: trimmedMessage,
+          location: {
+            latitude,
+            longitude,
+            placeName,
+          },
+        }),
         signal: controller.signal,
       });
 
