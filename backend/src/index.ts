@@ -4,6 +4,7 @@ import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { analyzeCropRouter } from "./routes/analyzeCrop";
 import { chatRouter } from "./routes/chat";
+import { marketRouter } from "./routes/market";
 import { weatherRouter } from "./routes/weather";
 
 dotenv.config({
@@ -22,6 +23,7 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.use(chatRouter);
 app.use(analyzeCropRouter);
+app.use(marketRouter);
 app.use(weatherRouter);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
