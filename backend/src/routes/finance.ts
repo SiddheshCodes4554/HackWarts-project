@@ -27,12 +27,49 @@ function toText(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() || fallback : fallback;
 }
 
+function toNumber(value: unknown, fallback = Number.NaN): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+}
+
+function inferIncomeLevel(source: Record<string, unknown>): string {
+  const explicit = toText(source.incomeLevel ?? source.income_level);
+  if (explicit) {
+    return explicit;
+  }
+
+  const landArea = toNumber(source.landArea ?? source.land_area);
+  if (!Number.isFinite(landArea)) {
+    return "medium";
+  }
+
+  if (landArea <= 2) {
+    return "low";
+  }
+
+  if (landArea <= 5) {
+    return "medium";
+  }
+
+  return "high";
+}
+
 function buildProfile(source: Record<string, unknown>): FinancialUserProfile {
+  const landArea = toNumber(source.landArea ?? source.land_area, 0);
+
   return {
-    landOwned: toBoolean(source.landOwned, false),
-    cropType: toText(source.cropType ?? source.crop),
-    location: toText(source.location, "India"),
-    incomeLevel: toText(source.incomeLevel, "medium"),
+    landOwned: toBoolean(source.landOwned ?? source.land_owned, landArea > 0),
+    cropType: toText(source.cropType ?? source.primary_crop ?? source.crop),
+    location: toText(source.location ?? source.location_name ?? source.placeName, "India"),
+    incomeLevel: inferIncomeLevel(source),
   };
 }
 
