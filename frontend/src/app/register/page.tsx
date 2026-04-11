@@ -97,6 +97,24 @@ export default function RegisterPage() {
           lowerMessage.includes('rate limit') ||
           lowerMessage.includes('over_email_send_rate_limit')
         ) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+
+          if (!signInError) {
+            setSuccessMessage('Account already exists. Signed in successfully, redirecting...');
+            setTimeout(() => {
+              router.push('/');
+            }, 900);
+            return;
+          }
+
+          if ((signInError.message || '').toLowerCase().includes('email not confirmed')) {
+            setError('Your account exists but email is not confirmed yet. Please check your inbox and confirm before signing in.');
+            return;
+          }
+
           const waitFor = parseRetrySeconds(message);
           setRetryAfterSeconds(waitFor);
           setError(`Too many signup attempts. Please wait ${waitFor}s before retrying, or sign in if your account already exists.`);
