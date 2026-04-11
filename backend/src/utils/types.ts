@@ -35,6 +35,11 @@ export type AgentResult = {
 };
 
 export type OrchestratedChatResponse = {
+  weather: Record<string, unknown>;
+  crops: Record<string, unknown>;
+  market: Record<string, unknown>;
+  finance: Record<string, unknown>;
+  final_message: string;
   intent: string;
   reply: string;
   agentResults: AgentResult[];
