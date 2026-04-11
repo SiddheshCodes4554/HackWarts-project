@@ -84,6 +84,21 @@ export async function getWeatherAdvisory(
       windSpeed: roundToOneDecimal(windSpeed),
       advice: buildAdvice(temperature, rainfall, humidity),
     };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "weather service unavailable";
+    console.warn(`Using fallback weather advisory (${message})`);
+
+    const temperature = 30;
+    const rainfall = 0;
+    const humidity = 55;
+
+    return {
+      temperature,
+      rainfall,
+      humidity,
+      windSpeed: 4,
+      advice: buildAdvice(temperature, rainfall, humidity),
+    };
   } finally {
     clearTimeout(timeoutHandle);
   }

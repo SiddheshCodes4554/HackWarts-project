@@ -13,8 +13,20 @@ weatherRouter.get("/weather", async (req: Request, res: Response) => {
     });
   }
 
-  const advisory = await getWeatherAdvisory(latitude, longitude);
-  return res.status(200).json(advisory);
+  try {
+    const advisory = await getWeatherAdvisory(latitude, longitude);
+    return res.status(200).json(advisory);
+  } catch (error) {
+    console.error("weather route fallback", error);
+    return res.status(200).json({
+      temperature: 30,
+      rainfall: 0,
+      humidity: 55,
+      windSpeed: 4,
+      advice: "Weather service is temporarily unavailable. Continue normal irrigation and monitor field moisture.",
+      source: "fallback",
+    });
+  }
 });
 
 export { weatherRouter };

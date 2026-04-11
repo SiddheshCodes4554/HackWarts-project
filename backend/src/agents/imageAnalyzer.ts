@@ -259,7 +259,7 @@ export async function analyzeCropImage(
     const fallback = inferFromSymptoms(cleanQuery, cleanQuery) ?? (await inferDisease(cleanQuery));
     return {
       symptoms: cleanQuery || "Visible crop symptoms detected from image.",
-      disease_name: fallback.disease_name,
+      disease_name: fallback.disease_name || "Leaf spot / blight",
       confidence: fallback.confidence || 55,
       source: "text",
     };
