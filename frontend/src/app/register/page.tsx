@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
@@ -12,12 +12,59 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+
+  useEffect(() => {
+    if (retryAfterSeconds <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setRetryAfterSeconds((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [retryAfterSeconds]);
+
+  const parseRetrySeconds = (message: string): number => {
+    const matched = message.match(/(\d+)\s*seconds?/i);
+    if (!matched) {
+      return 60;
+    }
+
+    const parsed = Number(matched[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+  };
+
+  const upsertInitialProfile = async (userId: string) => {
+    await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        name: '',
+        location_name: '',
+        latitude: 0,
+        longitude: 0,
+        land_area: 0,
+        primary_crop: '',
+        language: 'English',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id', ignoreDuplicates: false },
+    );
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccess(false);
+    setSuccessMessage(null);
+
+    if (loading || retryAfterSeconds > 0) {
+      return;
+    }
+
     setLoading(true);
 
     // Validate passwords match
@@ -35,35 +82,39 @@ export default function RegisterPage() {
     }
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
       });
 
       if (signUpError) {
-        setError(signUpError.message);
-      } else if (data.user) {
-        setSuccess(true);
-        // Create initial profile
-        await supabase.from('profiles').insert([
-          {
-            id: data.user.id,
-            name: '',
-            location_name: '',
-            latitude: 0,
-            longitude: 0,
-            land_area: 0,
-            primary_crop: '',
-            language: 'English',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]);
+        const message = signUpError.message || 'Registration failed';
+        const lowerMessage = message.toLowerCase();
 
-        // Redirect to onboarding after brief delay
-        setTimeout(() => {
-          router.push('/onboarding');
-        }, 1500);
+        if (
+          signUpError.status === 429 ||
+          lowerMessage.includes('rate limit') ||
+          lowerMessage.includes('over_email_send_rate_limit')
+        ) {
+          const waitFor = parseRetrySeconds(message);
+          setRetryAfterSeconds(waitFor);
+          setError(`Too many signup attempts. Please wait ${waitFor}s before retrying, or sign in if your account already exists.`);
+        } else if (lowerMessage.includes('already registered')) {
+          setError('This email is already registered. Please sign in instead.');
+        } else {
+          setError(message);
+        }
+      } else if (data.user) {
+        if (data.session) {
+          await upsertInitialProfile(data.user.id);
+          setSuccessMessage('Signup successful! Redirecting to onboarding...');
+          setTimeout(() => {
+            router.push('/onboarding');
+          }, 1200);
+        } else {
+          setSuccessMessage('Account created. Check your email inbox to confirm your account, then sign in.');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -86,9 +137,9 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {success && (
+        {successMessage && (
           <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-            Signup successful! Redirecting to onboarding...
+            {successMessage}
           </div>
         )}
 
@@ -140,10 +191,14 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || retryAfterSeconds > 0}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Creating Account...' : 'Create Account'}
+            {loading
+              ? 'Creating Account...'
+              : retryAfterSeconds > 0
+                ? `Retry in ${retryAfterSeconds}s`
+                : 'Create Account'}
           </button>
         </form>
 
