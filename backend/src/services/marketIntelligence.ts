@@ -5,6 +5,7 @@ const AGMARKNET_API_KEY = process.env.AGMARKNET_API_KEY ?? "";
 const AGMARKNET_RESOURCE_ID = process.env.AGMARKNET_RESOURCE_ID ?? "";
 const OSRM_BASE_URL = process.env.OSRM_BASE_URL ?? "https://router.project-osrm.org";
 const MARKET_TIMEOUT_MS = 12_000;
+const OSRM_TIMEOUT_MS = 4_000;
 const HISTORY_DAYS = 90;
 const CHART_DAYS = 30;
 const TRANSPORT_COST_PER_KM_PER_QTL = 8;
@@ -196,7 +197,7 @@ async function fetchRoadDistanceKm(
   destination: { latitude: number; longitude: number },
 ): Promise<number> {
   const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), MARKET_TIMEOUT_MS);
+  const timeoutHandle = setTimeout(() => controller.abort(), OSRM_TIMEOUT_MS);
 
   try {
     const url = `${OSRM_BASE_URL.replace(/\/$/, "")}/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=false`;
@@ -429,26 +430,31 @@ export async function getMarketIntelligence(context: AgentContext): Promise<Mark
   const originLatitude = Number.isFinite(context.latitude) ? (context.latitude as number) : 21.1458;
   const originLongitude = Number.isFinite(context.longitude) ? (context.longitude as number) : 79.0882;
 
-  const baseMarkets = await Promise.all(
-    BASE_MARKETS.map(async (market) => {
-      const fallbackDistance = haversineKm(originLatitude, originLongitude, market.latitude, market.longitude);
+  const baseMarkets: Array<MarketLocation & { market: string }> = [];
+  let osrmUnavailable = false;
 
-      let distanceKm = fallbackDistance;
+  for (const market of BASE_MARKETS) {
+    const fallbackDistance = haversineKm(originLatitude, originLongitude, market.latitude, market.longitude);
+    let distanceKm = fallbackDistance;
+
+    if (!osrmUnavailable) {
       try {
         distanceKm = await fetchRoadDistanceKm(
           { latitude: originLatitude, longitude: originLongitude },
           { latitude: market.latitude, longitude: market.longitude },
         );
       } catch (error) {
-        console.warn("Falling back to haversine distance", error);
+        const message = error instanceof Error ? error.message : "distance provider error";
+        console.warn(`Falling back to haversine distance (${message})`);
+        osrmUnavailable = true;
       }
+    }
 
-      return {
-        ...market,
-        distanceKm,
-      };
-    }),
-  );
+    baseMarkets.push({
+      ...market,
+      distanceKm,
+    });
+  }
 
   const agmarknetRecords = await fetchAgmarknetRecords(commodity, location.state, location.district);
   const liveHistory = buildHistoricalSeriesFromRecords(agmarknetRecords);

@@ -204,6 +204,19 @@ export async function getSoilProfile(latitude: number, longitude: number): Promi
       recommendation,
       source: "soilgrids",
     };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "soil service unavailable";
+    console.warn(`Using fallback soil profile (${message})`);
+
+    return {
+      ph: 6.8,
+      nitrogen: 0.18,
+      organicCarbon: 0.95,
+      soilType: "Neutral",
+      recommendation:
+        "Soil service is temporarily unavailable. Use balanced NPK fertilizer, add compost, and recheck soil in 2-3 weeks.",
+      source: "fallback",
+    };
   } finally {
     clearTimeout(timeoutHandle);
   }

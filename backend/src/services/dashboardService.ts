@@ -42,7 +42,12 @@ export async function getDashboardData(location: DashboardLocation): Promise<Das
   const [weatherResult, soilResult, financeResult] = await Promise.allSettled([
     weatherAgent(context),
     getSoilProfile(location.latitude, location.longitude),
-    getFinancialAdvice(location.placeName),
+    getFinancialAdvice({
+      landOwned: true,
+      cropType: "General",
+      location: location.placeName,
+      incomeLevel: "medium",
+    }),
   ]);
 
   if (weatherResult.status === "rejected") {
@@ -79,7 +84,15 @@ export async function getDashboardData(location: DashboardLocation): Promise<Das
     weather,
     crops,
     market,
-    finance: financeResult.value,
+    finance: {
+      schemes: financeResult.value.schemes.map((scheme, index) => ({
+        name: scheme.name,
+        benefit: scheme.benefit,
+        amountINR: Math.max(5000, 12000 - index * 1500),
+        eligibility: scheme.eligibility.join("; "),
+      })),
+      advice: financeResult.value.advice,
+    },
     soil,
   };
 }

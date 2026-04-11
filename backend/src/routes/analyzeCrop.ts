@@ -3,7 +3,7 @@ import { generateCropAdvice } from "../agents/cropAgent";
 import { analyzeCropImage } from "../agents/imageAnalyzer";
 import { weatherAgent } from "../agents/weatherAgent";
 import { getSoilProfile } from "../services/soilService";
-import { CropAdviceInput, CropAdvisoryResponse, CropLocation, ChatRequestPayload } from "../utils/types";
+import { AgentResult, CropAdviceInput, CropAdvisoryResponse, CropLocation, ChatRequestPayload } from "../utils/types";
 
 const analyzeCropRouter = Router();
 
@@ -66,16 +66,31 @@ analyzeCropRouter.post("/analyze-crop", async (req: Request, res: Response) => {
       });
     }
 
-    const [weatherResult, soilProfile] = await Promise.all([
-      weatherAgent({
+    let weatherResult: AgentResult;
+    try {
+      weatherResult = await weatherAgent({
         message: query || "crop image analysis",
         locale: location.placeName,
         latitude: location.lat,
         longitude: location.lon,
         timestamp: new Date().toISOString(),
-      }),
-      getSoilProfile(location.lat, location.lon),
-    ]);
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "weather service unavailable";
+      console.warn(`Using fallback weather metadata (${message})`);
+      weatherResult = {
+        agent: "weather",
+        insight: "Weather service unavailable, using seasonal defaults.",
+        confidence: 0.5,
+        metadata: {
+          temperature: 30,
+          rainfall: 2,
+          humidity: 60,
+        },
+      };
+    }
+
+    const soilProfile = await getSoilProfile(location.lat, location.lon);
 
     const imageAnalysis = await analyzeCropImage(image, query, location);
 

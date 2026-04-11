@@ -21,6 +21,8 @@ type AdvisoryCompletion = {
   steps: string[];
 };
 
+let financeFallbackWarned = false;
+
 function normalizeText(value: unknown, fallback = ""): string {
   if (typeof value !== "string") {
     return fallback;
@@ -135,13 +137,41 @@ function buildFallbackAdvice(schemes: GovernmentScheme[], language: "English" | 
 function parseCompletion(raw: string): AdvisoryCompletion | null {
   const trimmed = raw.trim();
 
+  const normalizeSteps = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value.map((step) => normalizeText(step)).filter(Boolean).slice(0, 6);
+    }
+
+    if (typeof value === "string") {
+      return value
+        .split(/\n|\r|;|\||\d+\.|\d+\)/)
+        .map((step) => step.replace(/^[-*\s]+/, "").trim())
+        .filter(Boolean)
+        .slice(0, 6);
+    }
+
+    return [];
+  };
+
+  const normalizeParsed = (parsed: Partial<AdvisoryCompletion>): AdvisoryCompletion | null => {
+    if (typeof parsed.advice !== "string") {
+      return null;
+    }
+
+    const advice = parsed.advice.trim();
+    if (!advice) {
+      return null;
+    }
+
+    const steps = normalizeSteps((parsed as { steps?: unknown }).steps);
+    return { advice, steps };
+  };
+
   try {
     const parsed = JSON.parse(trimmed) as Partial<AdvisoryCompletion>;
-    if (typeof parsed.advice === "string" && Array.isArray(parsed.steps)) {
-      return {
-        advice: parsed.advice.trim(),
-        steps: parsed.steps.map((step) => normalizeText(step)).filter(Boolean).slice(0, 6),
-      };
+    const normalized = normalizeParsed(parsed);
+    if (normalized) {
+      return normalized;
     }
   } catch {
     // Continue to extraction fallback.
@@ -154,17 +184,27 @@ function parseCompletion(raw: string): AdvisoryCompletion | null {
 
   try {
     const parsed = JSON.parse(fencedMatch[0]) as Partial<AdvisoryCompletion>;
-    if (typeof parsed.advice === "string" && Array.isArray(parsed.steps)) {
-      return {
-        advice: parsed.advice.trim(),
-        steps: parsed.steps.map((step) => normalizeText(step)).filter(Boolean).slice(0, 6),
-      };
+    const normalized = normalizeParsed(parsed);
+    if (normalized) {
+      return normalized;
     }
   } catch {
+    // Continue to text fallback below.
+  }
+
+  const lines = trimmed
+    .split(/\n|\r/)
+    .map((line) => line.replace(/^[-*\s\d.)]+/, "").trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
     return null;
   }
 
-  return null;
+  return {
+    advice: lines[0],
+    steps: lines.slice(1, 7),
+  };
 }
 
 async function groqCompletion(prompt: string): Promise<string> {
@@ -269,7 +309,11 @@ export async function getFinancialAdvice(
       api_live: eligible.api_live,
     };
   } catch (error) {
-    console.error("getFinancialAdvice fallback", error);
+    if (!financeFallbackWarned) {
+      const message = error instanceof Error ? error.message : "finance model unavailable";
+      console.warn(`Using fallback financial advice (${message})`);
+      financeFallbackWarned = true;
+    }
     return {
       schemes,
       advice: fallback.advice,
