@@ -23,6 +23,40 @@ type QueryLocation = {
   incomeLevel?: string;
 };
 
+const DISEASE_QUERY_HINTS = [
+  "disease",
+  "diseased",
+  "symptom",
+  "symptoms",
+  "infection",
+  "infected",
+  "pest",
+  "fungus",
+  "fungal",
+  "blight",
+  "leaf spot",
+  "rust",
+  "wilt",
+  "yellowing",
+  "spots",
+  "diagnose",
+  "diagnosis",
+  "treatment",
+  "prevention",
+  "spray",
+  "medicine",
+  "remedy",
+];
+
+function isDiseaseDiagnosticQuery(query: string, explicitDisease?: string): boolean {
+  if (typeof explicitDisease === "string" && explicitDisease.trim().length > 0) {
+    return true;
+  }
+
+  const normalizedQuery = query.toLowerCase();
+  return DISEASE_QUERY_HINTS.some((hint) => normalizedQuery.includes(hint));
+}
+
 function numericMetadata(metadata: Record<string, string | number | boolean> | undefined, key: string): number {
   const value = metadata?.[key];
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -64,6 +98,10 @@ export async function handleQuery(
   };
 
   const intentResult = await detectIntent(cleanQuery);
+  const effectiveIntent =
+    intentResult.intent === "crop_advice" && !isDiseaseDiagnosticQuery(cleanQuery, location?.disease)
+      ? "general_query"
+      : intentResult.intent;
 
   let weatherResult: AgentResult | undefined;
   let cropResult: AgentResult | undefined;
@@ -72,7 +110,7 @@ export async function handleQuery(
   let financeResult: AgentResult | undefined;
   let finalMessage = "";
 
-  if (intentResult.intent === "crop_advice") {
+  if (effectiveIntent === "crop_advice") {
     const [weatherData, soilData] = await Promise.all([
       weatherAgent(context),
       getSoilProfile(
@@ -117,11 +155,11 @@ export async function handleQuery(
         context: JSON.stringify(cropAdvice.context),
       },
     };
-  } else if (intentResult.intent === "market_price") {
+  } else if (effectiveIntent === "market_price") {
     marketResult = await marketAgent(context);
-  } else if (intentResult.intent === "financial_help") {
+  } else if (effectiveIntent === "financial_help") {
     financeResult = await financeAgent(context);
-  } else if (intentResult.intent === "weather") {
+  } else if (effectiveIntent === "weather") {
     weatherResult = await weatherAgent(context);
   }
 
@@ -131,19 +169,19 @@ export async function handleQuery(
   const market = toStructuredAgentOutput(marketResult);
   const finance = toStructuredAgentOutput(financeResult);
 
-  if (intentResult.intent === "general_query") {
+  if (effectiveIntent === "general_query") {
     const general = await generateResponse(cleanQuery);
     finalMessage = general.message;
-  } else if (intentResult.intent === "crop_advice") {
+  } else if (effectiveIntent === "crop_advice") {
     finalMessage = resolvedCropAdvice?.summary ?? "Crop advice is unavailable right now.";
-  } else if (intentResult.intent === "financial_help") {
+  } else if (effectiveIntent === "financial_help") {
     finalMessage = financeResult?.insight ?? "Financial guidance is unavailable right now.";
   } else {
     const combined = await generateResponse(
       [
         "You are an agricultural assistant.",
         `User query: ${cleanQuery}`,
-        `Detected intent: ${intentResult.intent}`,
+        `Detected intent: ${effectiveIntent}`,
         `Detected entities: ${JSON.stringify(intentResult.entities)}`,
         `Combine: ${JSON.stringify({ weather, crops, market, finance })}`,
         "Give:",
@@ -167,7 +205,7 @@ export async function handleQuery(
     finance,
     final_message: finalMessage,
     reply: finalMessage,
-    intent: intentResult.intent,
+    intent: effectiveIntent,
     agentResults,
     timestamp,
   };

@@ -28,6 +28,7 @@ type StructuredCards = {
 type Message = {
   role: "user" | "assistant";
   content: string;
+  intent?: string;
   structured?: Partial<StructuredCards>;
 };
 
@@ -93,6 +94,23 @@ function hasStructuredCards(structured?: Partial<StructuredCards>): boolean {
   return Object.values(structured).some((section) =>
     isSectionData(section) && hasRenderableFields(section),
   );
+}
+
+function shouldUseStructuredCards(intent: string | undefined, structured?: Partial<StructuredCards>): boolean {
+  if (intent !== "crop_advice" || !hasStructuredCards(structured)) {
+    return false;
+  }
+
+  const cropSection = structured?.crops;
+  if (!isSectionData(cropSection)) {
+    return false;
+  }
+
+  const diseaseFields = ["disease", "symptoms", "root_cause", "treatment", "prevention", "warnings"];
+  return diseaseFields.some((field) => {
+    const value = cropSection[field];
+    return value !== null && value !== undefined && value !== "";
+  });
 }
 
 function hasRenderableFields(section: SectionData): boolean {
@@ -196,7 +214,8 @@ export default function AssistantPage() {
         {
           role: "assistant",
           content: assistantResponse,
-          structured: hasStructuredCards(structured) ? structured : undefined,
+          intent: data.intent,
+          structured: shouldUseStructuredCards(data.intent, structured) ? structured : undefined,
         },
       ]);
 
@@ -273,7 +292,7 @@ export default function AssistantPage() {
                   key={`${message.role}-${index}`}
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {message.role === "assistant" && hasStructuredCards(message.structured) ? (
+                  {message.role === "assistant" && shouldUseStructuredCards(message.intent, message.structured) ? (
                     <div className="w-full max-w-[95%] space-y-3 rounded-[1.75rem] border border-lime-100 bg-white p-4 shadow-sm sm:p-5">
                       <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <Sparkles className="h-4 w-4 text-lime-700" />
