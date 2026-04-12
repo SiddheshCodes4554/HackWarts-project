@@ -37,6 +37,7 @@ import {
 import { LocationModal } from "../../../components/LocationModal";
 import { useLocation } from "../../../context/LocationContext";
 import { useUser } from "@/context/UserContext";
+import FarmInsights from "../../../components/dashboard/FarmInsights";
 
 type DashboardPayload = {
   weather: {
@@ -479,6 +480,17 @@ export default function HomePage() {
             {data.warning}
           </div>
         ) : null}
+
+        {/* Smart Farm Intelligence Dashboard */}
+        {!isLoading && Number.isFinite(effectiveLatitude) && Number.isFinite(effectiveLongitude) && (
+          <section className="rounded-3xl border border-purple-200 bg-white/80 p-6 shadow-[0_30px_100px_rgba(147,51,234,0.08)]">
+            <FarmInsights
+              latitude={effectiveLatitude as number}
+              longitude={effectiveLongitude as number}
+              placeName={effectivePlaceName || "Unknown Location"}
+            />
+          </section>
+        )}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[
