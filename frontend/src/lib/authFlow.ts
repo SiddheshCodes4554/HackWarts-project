@@ -134,6 +134,38 @@ function friendlyErrorMessage(params: {
   return 'Unable to authenticate right now. Please try again.';
 }
 
+async function ensureProfileExists(userId: string, email: string): Promise<void> {
+  try {
+    // Check if profile exists
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (existingProfile) {
+      return; // Profile already exists
+    }
+
+    // Create default profile if missing
+    await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        name: email.split('@')[0],
+        location_name: 'Default Location',
+        latitude: 0,
+        longitude: 0,
+        land_area: 0,
+        primary_crop: 'General',
+        language: 'en',
+      });
+  } catch (err) {
+    // Silently fail - profile creation is not critical for login
+    console.error('Error ensuring profile exists:', err);
+  }
+}
+
 export async function loginOrSignup(
   email: string,
   password: string,
@@ -149,6 +181,9 @@ export async function loginOrSignup(
   });
 
   if (!signInError && signInData.user && signInData.session) {
+    // Ensure profile exists for users who may have been created via API/SQL
+    await ensureProfileExists(signInData.user.id, normalizedEmail);
+    
     return {
       ok: true,
       mode: 'login',
