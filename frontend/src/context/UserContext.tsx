@@ -4,6 +4,22 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000;
+
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -43,7 +59,8 @@ function isInvalidRefreshTokenError(error: unknown): boolean {
   return (
     message.includes('invalid refresh token') ||
     message.includes('refresh token not found') ||
-    message.includes('refresh_token_not_found')
+    message.includes('refresh_token_not_found') ||
+    message.includes('timed out')
   );
 }
 
@@ -69,11 +86,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = async (userId: string) => {
     try {
       setError(null);
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const profileResult = await withTimeout(
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single(),
+        AUTH_BOOTSTRAP_TIMEOUT_MS,
+        'Profile fetch',
+      ) as { data: UserProfile | null; error: { code?: string; message?: string } | null };
+      const { data, error: fetchError } = profileResult;
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
@@ -94,7 +116,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await withTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS, 'Auth session');
 
         if (session?.user) {
           setUser(session.user);
