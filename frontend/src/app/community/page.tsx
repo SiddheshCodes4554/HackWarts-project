@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { useLocation } from "@/context/LocationContext";
@@ -52,22 +52,6 @@ type Metrics = {
 };
 
 const PAGE_SIZE = 8;
-const QUERY_TIMEOUT_MS = 45_000;
-
-async function withTimeout<T>(promise: PromiseLike<T>, label: string, timeoutMs = QUERY_TIMEOUT_MS): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out. Please retry.`)), timeoutMs);
-  });
-
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-}
 
 function getDistrictFromPlace(place: string): string {
   const [district] = place.split(",");
@@ -124,22 +108,20 @@ export default function CommunityPage() {
   const [posting, setPosting] = useState(false);
 
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+  const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProfiles = useCallback(async (userIds: string[]) => {
     if (!userIds.length) {
       return;
     }
 
-    const profileResult = await withTimeout(
-      supabase
-        .from("profiles")
-        .select("id,name,location_name,primary_crop")
-        .in("id", userIds),
-      "Fetching profiles",
-    ) as { data: ProfileLite[] | null };
+    const { data } = await supabase
+      .from("profiles")
+      .select("id,name,location_name,primary_crop")
+      .in("id", userIds);
 
     const nextMap: Record<string, ProfileLite> = {};
-    (profileResult.data ?? []).forEach((row) => {
+    (data as ProfileLite[] | null)?.forEach((row) => {
       nextMap[row.id] = row;
     });
 
@@ -165,7 +147,7 @@ export default function CommunityPage() {
         .from("post_shares")
         .select("post_id")
         .in("post_id", postIds),
-    ].map((queryPromise, index) => withTimeout(queryPromise, `Fetching community metadata ${index + 1}`)));
+    ]);
 
     const byPostComments: Record<string, CommentRow[]> = {};
     (commentsData as CommentRow[] | null)?.forEach((comment) => {
@@ -239,12 +221,12 @@ export default function CommunityPage() {
         query = query.eq("crop_tag", cropFilter);
       }
 
-      const postsResult = await withTimeout(query, "Fetching community posts") as { data: CommunityPost[] | null; error: { message: string } | null };
-      if (postsResult.error) {
-        throw postsResult.error;
+      const { data, error: postsError } = await query;
+      if (postsError) {
+        throw postsError;
       }
 
-      const rows = postsResult.data ?? [];
+      const rows = (data as CommunityPost[] | null) ?? [];
       const nextPosts = reset ? rows : [...posts, ...rows];
 
       setPosts(nextPosts);
@@ -280,7 +262,40 @@ export default function CommunityPage() {
       setPage(0);
       void fetchPosts(true);
     }
-  }, [user, districtFilter, cropFilter]);
+  }, [user, districtFilter, cropFilter, fetchPosts]);
+
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (realtimeRefreshTimerRef.current) {
+      clearTimeout(realtimeRefreshTimerRef.current);
+    }
+
+    realtimeRefreshTimerRef.current = setTimeout(() => {
+      setPage(0);
+      void fetchPosts(true);
+    }, 350);
+  }, [fetchPosts]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`community-live-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_posts" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_shares" }, scheduleRealtimeRefresh)
+      .subscribe();
+
+    return () => {
+      if (realtimeRefreshTimerRef.current) {
+        clearTimeout(realtimeRefreshTimerRef.current);
+        realtimeRefreshTimerRef.current = null;
+      }
+      void supabase.removeChannel(channel);
+    };
+  }, [scheduleRealtimeRefresh, user]);
 
   const sortedPosts = useMemo(() => {
     const clone = [...posts];

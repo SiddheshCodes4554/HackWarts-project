@@ -1,5 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function localModeration(body: Record<string, unknown>) {
+  const text = String(body.text ?? body.content ?? body.caption ?? "");
+  const lower = text.toLowerCase();
+  const blocked = /\b(scam|fraud|hate|violence|abuse|kill)\b/.test(lower);
+  const warning = !blocked && /\b(buy now|guaranteed profit|100% sure)\b/.test(lower);
+
+  return {
+    status: blocked ? "blocked" : warning ? "warning" : "safe",
+    summary: text.slice(0, 180) || "No text provided.",
+    tags: text
+      .split(/\s+/)
+      .map((word) => word.replace(/[^a-zA-Z0-9]/g, ""))
+      .filter((word) => word.length > 3)
+      .slice(0, 6),
+    suggestions: blocked
+      ? ["Remove unsafe language.", "Rewrite the post before publishing."]
+      : ["Keep the post specific and concise.", "Add a crop or market detail if useful."],
+    source: "fallback",
+  };
+}
+
 function backendCandidates(): string[] {
   const values = [
     process.env.BACKEND_API_URL,
@@ -19,7 +40,7 @@ export async function POST(request: NextRequest) {
   const bases = backendCandidates();
 
   if (!bases.length) {
-    return NextResponse.json({ error: "BACKEND_API_URL is not configured" }, { status: 503 });
+    return NextResponse.json(localModeration(body), { status: 200 });
   }
 
   for (const base of bases) {
@@ -43,5 +64,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: "Unable to moderate community post" }, { status: 503 });
+  return NextResponse.json(localModeration(body), { status: 200 });
 }

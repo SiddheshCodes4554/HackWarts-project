@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const FALLBACK_COMMODITIES = [
+  { name: "Tomato", category: "Vegetables" },
+  { name: "Onion", category: "Vegetables" },
+  { name: "Wheat", category: "Grains" },
+  { name: "Rice", category: "Grains" },
+  { name: "Soybean", category: "Grains" },
+  { name: "Cotton", category: "Grains" },
+  { name: "Potato", category: "Vegetables" },
+  { name: "Maize", category: "Grains" },
+  { name: "Banana", category: "Fruits" },
+  { name: "Mango", category: "Fruits" },
+];
+
 function backendCandidates(): string[] {
   const values = [
     process.env.BACKEND_API_URL,
@@ -19,9 +32,22 @@ export async function GET(request: NextRequest) {
   const state = request.nextUrl.searchParams.get("state") ?? "";
   const q = request.nextUrl.searchParams.get("q") ?? "";
 
+  const fallback = () => {
+    const search = q.trim().toLowerCase();
+    const commodities = FALLBACK_COMMODITIES.filter((item) => !search || item.name.toLowerCase().includes(search));
+    return NextResponse.json(
+      {
+        commodities,
+        source: "fallback",
+        warning: "Live backend unavailable. Showing fallback commodity list.",
+      },
+      { status: 200 },
+    );
+  };
+
   const bases = backendCandidates();
   if (!bases.length) {
-    return NextResponse.json({ error: "BACKEND_API_URL is not configured" }, { status: 503 });
+    return fallback();
   }
 
   const query = new URLSearchParams({ district, state, q });
@@ -42,5 +68,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: "Unable to fetch commodity list from backend" }, { status: 503 });
+  return fallback();
 }

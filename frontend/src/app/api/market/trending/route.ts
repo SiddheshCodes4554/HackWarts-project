@@ -18,9 +18,27 @@ export async function GET(request: NextRequest) {
   const district = request.nextUrl.searchParams.get("district") ?? "";
   const state = request.nextUrl.searchParams.get("state") ?? "";
 
+  const FALLBACK_TRENDS = [
+    { name: "Tomato", direction: "up", score: 92 },
+    { name: "Onion", direction: "up", score: 88 },
+    { name: "Wheat", direction: "steady", score: 81 },
+    { name: "Rice", direction: "steady", score: 79 },
+    { name: "Cotton", direction: "down", score: 67 },
+  ];
+
+  const fallback = () =>
+    NextResponse.json(
+      {
+        trends: FALLBACK_TRENDS,
+        source: "fallback",
+        warning: "Live backend unavailable. Showing fallback market trends.",
+      },
+      { status: 200 },
+    );
+
   const bases = backendCandidates();
   if (!bases.length) {
-    return NextResponse.json({ error: "BACKEND_API_URL is not configured" }, { status: 503 });
+    return fallback();
   }
 
   const query = new URLSearchParams({ district, state });
@@ -41,5 +59,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: "Unable to fetch trending analytics from backend" }, { status: 503 });
+  return fallback();
 }

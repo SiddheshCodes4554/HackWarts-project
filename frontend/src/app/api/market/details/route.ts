@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const FALLBACK_DETAILS = {
+  commodity: "",
+  stats: {
+    min: 2100,
+    max: 2650,
+    modal: 2380,
+    trend: "steady",
+  },
+  insight: "Fallback market snapshot. Live backend data is unavailable.",
+};
+
 function backendCandidates(): string[] {
   const values = [
     process.env.BACKEND_API_URL,
@@ -21,7 +32,16 @@ export async function GET(request: NextRequest) {
 
   const bases = backendCandidates();
   if (!bases.length) {
-    return NextResponse.json({ error: "BACKEND_API_URL is not configured" }, { status: 503 });
+    return NextResponse.json(
+      {
+        ...FALLBACK_DETAILS,
+        commodity,
+        district,
+        state,
+        source: "fallback",
+      },
+      { status: 200 },
+    );
   }
 
   const query = new URLSearchParams({ commodity, district, state });
@@ -42,5 +62,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: "Unable to fetch commodity details from backend" }, { status: 503 });
+  return NextResponse.json(
+    {
+      ...FALLBACK_DETAILS,
+      commodity,
+      district,
+      state,
+      source: "fallback",
+    },
+    { status: 200 },
+  );
 }

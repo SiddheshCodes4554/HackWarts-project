@@ -1,5 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function localPriceGuardian(body: Record<string, unknown>) {
+  const offeredPrice = Number(body.offeredPrice ?? body.price ?? 0);
+  const marketPrice = Number(body.marketPrice ?? body.referencePrice ?? 0);
+  const ratio = marketPrice > 0 ? offeredPrice / marketPrice : 1;
+  const verdict = ratio >= 0.95 ? "fair" : ratio >= 0.85 ? "slightly_low" : "low";
+
+  return {
+    verdict,
+    confidence: Math.max(0.55, Math.min(0.95, 1 - Math.abs(1 - ratio))),
+    explanation:
+      marketPrice > 0
+        ? `Fallback fairness check against reference price ${marketPrice}.`
+        : "Fallback fairness check used because live backend is unavailable.",
+    source: "fallback",
+  };
+}
+
 function backendCandidates(): string[] {
   const values = [
     process.env.BACKEND_API_URL,
@@ -19,7 +36,7 @@ export async function POST(request: NextRequest) {
   const bases = backendCandidates();
 
   if (!bases.length) {
-    return NextResponse.json({ error: "BACKEND_API_URL is not configured" }, { status: 503 });
+    return NextResponse.json(localPriceGuardian(body), { status: 200 });
   }
 
   for (const base of bases) {
@@ -43,5 +60,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: "Unable to evaluate bid fairness" }, { status: 503 });
+  return NextResponse.json(localPriceGuardian(body), { status: 200 });
 }
