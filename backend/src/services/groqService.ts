@@ -1,8 +1,11 @@
 import { pickGroqApiKey } from "./groqKeys";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 const GROQ_INTENT_MODEL = process.env.GROQ_INTENT_MODEL ?? "llama-3.3-70b-versatile";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
+const GEMINI_INTENT_MODEL = process.env.GEMINI_INTENT_MODEL ?? GEMINI_MODEL;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 1;
 
@@ -46,6 +49,21 @@ type GroqApiResponse = {
   error?: {
     message?: string;
     type?: string;
+  };
+};
+
+type GeminiApiResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+  error?: {
+    message?: string;
+    code?: number;
+    status?: string;
   };
 };
 
@@ -120,6 +138,15 @@ function timeoutMs(): number {
   }
 
   return DEFAULT_TIMEOUT_MS;
+}
+
+function getGeminiApiKey(): string {
+  return (
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_API_KEY?.trim() ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
+    ""
+  );
 }
 
 function parseModelJson(rawContent: string): StructuredGroqResponse | null {
@@ -320,6 +347,78 @@ async function requestIntentFromGroq(query: string, apiKey: string): Promise<Int
   throw lastError ?? new Error("No valid intent model candidates available.");
 }
 
+async function requestIntentFromGemini(query: string, apiKey: string): Promise<IntentDetectionResult> {
+  const modelCandidates = Array.from(
+    new Set(
+      [process.env.GEMINI_INTENT_MODEL, process.env.GEMINI_MODEL, GEMINI_INTENT_MODEL, GEMINI_MODEL].filter(
+        (model): model is string => Boolean(model && model.trim()),
+      ),
+    ),
+  );
+
+  let lastError: Error | null = null;
+
+  for (const model of modelCandidates) {
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), timeoutMs());
+
+    try {
+      const response = await fetch(`${GEMINI_API_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 220,
+            responseMimeType: "application/json",
+          },
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  "You are an AI assistant for Indian farmers. Classify the query into one intent: crop_advice, weather, market_price, financial_help, general_query. Also extract entities: crop, location, season, query_type (buy/sell/advice). Return only JSON with shape { intent, entities }.",
+              },
+            ],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: query }],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as GeminiApiResponse;
+      if (!response.ok) {
+        const apiError = payload.error?.message ?? `HTTP ${response.status}`;
+        throw new Error(`Gemini intent API error (${model}): ${apiError}`);
+      }
+
+      const rawContent = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawContent) {
+        throw new Error(`Gemini intent API returned an empty completion payload (${model}).`);
+      }
+
+      const parsed = parseIntentJson(rawContent);
+      if (!parsed) {
+        throw new Error(`Gemini intent response was not valid JSON (${model}).`);
+      }
+
+      return parsed;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Unknown Gemini intent detection error");
+    } finally {
+      clearTimeout(requestTimeout);
+    }
+  }
+
+  throw lastError ?? new Error("No valid Gemini intent model candidates available.");
+}
+
 async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGroqResponse> {
   const controller = new AbortController();
   const requestTimeout = setTimeout(() => controller.abort(), timeoutMs());
@@ -372,6 +471,75 @@ async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGr
   } finally {
     clearTimeout(requestTimeout);
   }
+}
+
+async function requestGemini(prompt: string, apiKey: string): Promise<StructuredGroqResponse> {
+  const modelCandidates = Array.from(
+    new Set([process.env.GEMINI_MODEL, GEMINI_MODEL].filter((model): model is string => Boolean(model && model.trim()))),
+  );
+
+  let lastError: Error | null = null;
+
+  for (const model of modelCandidates) {
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), timeoutMs());
+
+    try {
+      const response = await fetch(`${GEMINI_API_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 320,
+            responseMimeType: "application/json",
+          },
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  "You are FarmEase AI, an assistant for farmers and the FarmEase app. Answer agriculture questions, crop guidance, weather planning, market/finance support, and app usage questions. Return only valid JSON with exactly two keys: intent and message. Keep the message concise, practical, and actionable.",
+              },
+            ],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as GeminiApiResponse;
+
+      if (!response.ok) {
+        const apiError = payload.error?.message ?? `HTTP ${response.status}`;
+        throw new Error(`Gemini API error (${model}): ${apiError}`);
+      }
+
+      const rawContent = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawContent) {
+        throw new Error(`Gemini API returned an empty completion payload (${model}).`);
+      }
+
+      const parsed = parseModelJson(rawContent);
+      if (!parsed) {
+        throw new Error(`Gemini response did not contain valid structured JSON (${model}).`);
+      }
+
+      return parsed;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Unknown Gemini response error");
+    } finally {
+      clearTimeout(requestTimeout);
+    }
+  }
+
+  throw lastError ?? new Error("No valid Gemini model candidates available.");
 }
 
 export async function requestGroqJson<T>(request: GroqJsonRequest, fallback: T): Promise<T> {
@@ -452,8 +620,10 @@ export async function generateResponse(
     );
   }
 
-  const apiKey = pickGroqApiKey();
-  if (!apiKey) {
+  const groqApiKey = pickGroqApiKey();
+  const geminiApiKey = getGeminiApiKey();
+
+  if (!groqApiKey && !geminiApiKey) {
     if (mode.strict) {
       throw new Error("Live AI unavailable");
     }
@@ -461,23 +631,37 @@ export async function generateResponse(
     return localFallbackResponse(cleanedPrompt, "configuration_required");
   }
 
+  let lastError: Error | null = null;
+
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
-      return await requestGroq(cleanedPrompt, apiKey);
+      if (groqApiKey) {
+        return await requestGroq(cleanedPrompt, groqApiKey);
+      }
+      break;
     } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Groq request failed");
       const isLastAttempt = attempt === MAX_RETRIES;
       if (isLastAttempt) {
-        console.error("Groq request failed", error);
-        if (mode.strict) {
-          throw error instanceof Error ? error : new Error("Live AI unavailable");
-        }
-
-        return localFallbackResponse(cleanedPrompt, "service_unavailable");
+        console.error("Groq request failed", lastError);
       }
     }
   }
 
-  return fallbackResponse("Unexpected completion flow reached.", "internal_guardrail");
+  if (geminiApiKey) {
+    try {
+      return await requestGemini(cleanedPrompt, geminiApiKey);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Gemini request failed");
+      console.error("Gemini request failed", lastError);
+    }
+  }
+
+  if (mode.strict) {
+    throw lastError ?? new Error("Live AI unavailable");
+  }
+
+  return localFallbackResponse(cleanedPrompt, "service_unavailable");
 }
 
 export async function detectIntent(query: string): Promise<IntentDetectionResult> {
@@ -495,31 +679,46 @@ export async function detectIntent(query: string): Promise<IntentDetectionResult
     };
   }
 
-  const apiKey = pickGroqApiKey();
-  if (!apiKey) {
-    console.warn("Intent detection fallback: GROQ_API_KEY missing");
-    return {
-      ...defaultIntentResult(),
-      entities,
-    };
+  const groqApiKey = pickGroqApiKey();
+  const geminiApiKey = getGeminiApiKey();
+
+  try {
+    if (groqApiKey) {
+      const llmResult = await requestIntentFromGroq(cleanedQuery, groqApiKey);
+      return {
+        intent: llmResult.intent,
+        entities: {
+          crop: llmResult.entities.crop || entities.crop,
+          location: llmResult.entities.location || entities.location,
+          season: llmResult.entities.season || entities.season,
+          query_type: llmResult.entities.query_type || entities.query_type,
+        },
+      };
+    }
+  } catch (error) {
+    console.error("Intent detection via Groq failed", error);
   }
 
   try {
-    const llmResult = await requestIntentFromGroq(cleanedQuery, apiKey);
-    return {
-      intent: llmResult.intent,
-      entities: {
-        crop: llmResult.entities.crop || entities.crop,
-        location: llmResult.entities.location || entities.location,
-        season: llmResult.entities.season || entities.season,
-        query_type: llmResult.entities.query_type || entities.query_type,
-      },
-    };
+    if (geminiApiKey) {
+      const llmResult = await requestIntentFromGemini(cleanedQuery, geminiApiKey);
+      return {
+        intent: llmResult.intent,
+        entities: {
+          crop: llmResult.entities.crop || entities.crop,
+          location: llmResult.entities.location || entities.location,
+          season: llmResult.entities.season || entities.season,
+          query_type: llmResult.entities.query_type || entities.query_type,
+        },
+      };
+    }
   } catch (error) {
-    console.error("Intent detection failed", error);
-    return {
-      ...defaultIntentResult(),
-      entities,
-    };
+    console.error("Intent detection via Gemini failed", error);
   }
+
+  console.warn("Intent detection fallback: no live provider available");
+  return {
+    ...defaultIntentResult(),
+    entities,
+  };
 }

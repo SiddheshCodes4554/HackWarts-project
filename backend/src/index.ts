@@ -28,11 +28,16 @@ function getOptionalEnv(name: string): string {
 }
 
 const groqKeys = getGroqApiKeys();
+const geminiKey =
+  process.env.GEMINI_API_KEY?.trim() ||
+  process.env.GOOGLE_API_KEY?.trim() ||
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
+  "";
 const SUPABASE_URL = getOptionalEnv("SUPABASE_URL");
 const SUPABASE_ANON_KEY = getOptionalEnv("SUPABASE_ANON_KEY");
 
-if (groqKeys.length === 0) {
-  console.warn("No Groq API key configured; assistant will run with local fallbacks.");
+if (groqKeys.length === 0 && !geminiKey) {
+  console.warn("No Groq or Gemini API key configured; assistant will run with local fallbacks.");
 }
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -41,6 +46,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 // Prevent lint/TS unused complaints while still running startup diagnostics.
 void groqKeys;
+void geminiKey;
 void SUPABASE_URL;
 void SUPABASE_ANON_KEY;
 
