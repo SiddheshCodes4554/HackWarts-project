@@ -108,59 +108,69 @@ export async function handleQuery(
   let cropAdvice: CropAdviceResult | undefined;
   let marketResult: AgentResult | undefined;
   let financeResult: AgentResult | undefined;
+  let intentExecutionError: Error | null = null;
   let finalMessage = "";
 
-  if (effectiveIntent === "crop_advice") {
-    const [weatherData, soilData] = await Promise.all([
-      weatherAgent(context, { strict: true }),
-      getSoilProfile(
-        Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
-        Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
-      ),
-    ]);
+  try {
+    if (effectiveIntent === "crop_advice") {
+      const [weatherData, soilData] = await Promise.all([
+        weatherAgent(context, { strict: true }),
+        getSoilProfile(
+          Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
+          Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
+        ),
+      ]);
 
-    weatherResult = weatherData;
-    const selectedCrop = (location?.crop ?? intentResult.entities.crop)?.trim() || undefined;
+      weatherResult = weatherData;
+      const selectedCrop = (location?.crop ?? intentResult.entities.crop)?.trim() || undefined;
 
-    cropAdvice = await generateCropAdvice({
-      location: {
-        lat: Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
-        lon: Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
-        placeName: location?.placeName ?? context.locale ?? "Nagpur, Maharashtra",
-      },
-      weather: {
-        temperature: numericMetadata(weatherData.metadata, "temperature"),
-        rainfall: numericMetadata(weatherData.metadata, "rainfall"),
-        humidity: numericMetadata(weatherData.metadata, "humidity"),
-      },
-      soil: soilData,
-      crop: selectedCrop,
-      disease: location?.disease ?? undefined,
-      language: location?.language ?? "English",
-      query: cleanQuery,
-    }, { strict: true });
+      const advice = await generateCropAdvice(
+        {
+          location: {
+            lat: Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
+            lon: Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
+            placeName: location?.placeName ?? context.locale ?? "Nagpur, Maharashtra",
+          },
+          weather: {
+            temperature: numericMetadata(weatherData.metadata, "temperature"),
+            rainfall: numericMetadata(weatherData.metadata, "rainfall"),
+            humidity: numericMetadata(weatherData.metadata, "humidity"),
+          },
+          soil: soilData,
+          crop: selectedCrop,
+          disease: location?.disease ?? undefined,
+          language: location?.language ?? "English",
+          query: cleanQuery,
+        },
+        { strict: true },
+      );
 
-    cropResult = {
-      agent: "crop",
-      insight: `${cropAdvice.disease}. ${cropAdvice.root_cause}`,
-      confidence: Math.max(0, Math.min(1, cropAdvice.confidence / 100)),
-      metadata: {
-        disease: cropAdvice.disease,
-        confidence: cropAdvice.confidence,
-        root_cause: cropAdvice.root_cause,
-        treatment: cropAdvice.treatment.join(" | "),
-        prevention: cropAdvice.prevention.join(" | "),
-        crop_recommendation: cropAdvice.crop_recommendation.join(" | "),
-        warnings: cropAdvice.warnings.join(" | "),
-        context: JSON.stringify(cropAdvice.context),
-      },
-    };
-  } else if (effectiveIntent === "market_price") {
-    marketResult = await marketAgent(context, { strict: true });
-  } else if (effectiveIntent === "financial_help") {
-    financeResult = await financeAgent(context, { strict: true });
-  } else if (effectiveIntent === "weather") {
-    weatherResult = await weatherAgent(context, { strict: true });
+      cropAdvice = advice;
+      cropResult = {
+        agent: "crop",
+        insight: `${advice.disease}. ${advice.root_cause}`,
+        confidence: Math.max(0, Math.min(1, advice.confidence / 100)),
+        metadata: {
+          disease: advice.disease,
+          confidence: advice.confidence,
+          root_cause: advice.root_cause,
+          treatment: advice.treatment.join(" | "),
+          prevention: advice.prevention.join(" | "),
+          crop_recommendation: advice.crop_recommendation.join(" | "),
+          warnings: advice.warnings.join(" | "),
+          context: JSON.stringify(advice.context),
+        },
+      };
+    } else if (effectiveIntent === "market_price") {
+      marketResult = await marketAgent(context, { strict: true });
+    } else if (effectiveIntent === "financial_help") {
+      financeResult = await financeAgent(context, { strict: true });
+    } else if (effectiveIntent === "weather") {
+      weatherResult = await weatherAgent(context, { strict: true });
+    }
+  } catch (error) {
+    intentExecutionError = error instanceof Error ? error : new Error("Live AI unavailable");
+    console.error("Intent execution fallback to general live response", intentExecutionError);
   }
 
   const weather = toStructuredAgentOutput(weatherResult);
@@ -169,7 +179,18 @@ export async function handleQuery(
   const market = toStructuredAgentOutput(marketResult);
   const finance = toStructuredAgentOutput(financeResult);
 
-  if (effectiveIntent === "general_query") {
+  if (intentExecutionError) {
+    const recovered = await generateResponse(
+      [
+        "You are an agricultural assistant.",
+        "A specialist toolchain is temporarily unavailable.",
+        `User query: ${cleanQuery}`,
+        "Provide a direct, practical answer and next steps in simple language.",
+      ].join("\n"),
+      { strict: true },
+    );
+    finalMessage = recovered.message;
+  } else if (effectiveIntent === "general_query") {
     const general = await generateResponse(cleanQuery, { strict: true });
     finalMessage = general.message;
   } else if (effectiveIntent === "crop_advice") {
@@ -206,7 +227,7 @@ export async function handleQuery(
     finance,
     final_message: finalMessage,
     reply: finalMessage,
-    intent: effectiveIntent,
+    intent: intentExecutionError ? "general_query" : effectiveIntent,
     agentResults,
     timestamp,
   };

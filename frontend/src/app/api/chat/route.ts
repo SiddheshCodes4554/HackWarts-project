@@ -32,6 +32,7 @@ type ChatProxyResponse = {
 };
 
 function backendCandidates(): string[] {
+  const isProduction = process.env.NODE_ENV === "production";
   const values = [
     process.env.BACKEND_API_URL,
     process.env.API_BASE_URL,
@@ -40,7 +41,7 @@ function backendCandidates(): string[] {
   ]
     .map((value) => (value ?? "").trim().replace(/\/$/, ""))
     .filter(Boolean)
-    .filter((value) => !/localhost|127\.0\.0\.1/i.test(value));
+    .filter((value) => !isProduction || !/localhost|127\.0\.0\.1/i.test(value));
 
   return [...new Set(values)];
 }

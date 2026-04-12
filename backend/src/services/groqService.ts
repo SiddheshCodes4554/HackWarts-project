@@ -2,7 +2,7 @@ import { pickGroqApiKey } from "./groqKeys";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
-const GROQ_INTENT_MODEL = process.env.GROQ_INTENT_MODEL ?? "llama3-70b-8192";
+const GROQ_INTENT_MODEL = process.env.GROQ_INTENT_MODEL ?? "llama-3.3-70b-versatile";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 1;
 
@@ -213,7 +213,11 @@ function ruleBasedIntent(query: string): SupportedIntent | null {
     return "weather";
   }
 
-  if (/\b(crop|grow|plant)\b/.test(q)) {
+  if (
+    /\b(crop|grow|plant|pest|disease|leaf|leaves|wilt|fungus|blight|spot|yellow|soil|fertili[sz]er|irrigation|seed|sowing|harvest|tomato|onion|potato|rice|wheat|maize|cotton|soybean|banana|mango)\b/.test(
+      q,
+    )
+  ) {
     return "crop_advice";
   }
 
@@ -247,57 +251,73 @@ function extractEntities(query: string): IntentEntities {
 }
 
 async function requestIntentFromGroq(query: string, apiKey: string): Promise<IntentDetectionResult> {
-  const controller = new AbortController();
-  const requestTimeout = setTimeout(() => controller.abort(), timeoutMs());
+  const modelCandidates = Array.from(
+    new Set(
+      [process.env.GROQ_INTENT_MODEL, process.env.GROQ_MODEL, GROQ_INTENT_MODEL, GROQ_MODEL].filter(
+        (model): model is string => Boolean(model && model.trim()),
+      ),
+    ),
+  );
 
-  try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_INTENT_MODEL,
-        temperature: 0,
-        max_tokens: 220,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an AI assistant for Indian farmers.\n\nYour job is to classify the user's query into one of the following intents:\ncrop_advice, weather, market_price, financial_help, general_query\n\nAlso extract entities:\n- crop name (if mentioned)\n- location (if mentioned)\n- season (if mentioned)\n- query_type (buy/sell/advice)\n\nReturn ONLY JSON. No explanation.",
-          },
-          {
-            role: "user",
-            content: query,
-          },
-        ],
-      }),
-      signal: controller.signal,
-    });
+  let lastError: Error | null = null;
 
-    const payload = (await response.json().catch(() => ({}))) as GroqApiResponse;
+  for (const model of modelCandidates) {
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), timeoutMs());
 
-    if (!response.ok) {
-      const apiError = payload.error?.message ?? `HTTP ${response.status}`;
-      throw new Error(`Groq intent API error: ${apiError}`);
+    try {
+      const response = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          max_tokens: 220,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an AI assistant for Indian farmers.\n\nYour job is to classify the user's query into one of the following intents:\ncrop_advice, weather, market_price, financial_help, general_query\n\nAlso extract entities:\n- crop name (if mentioned)\n- location (if mentioned)\n- season (if mentioned)\n- query_type (buy/sell/advice)\n\nReturn ONLY JSON. No explanation.",
+            },
+            {
+              role: "user",
+              content: query,
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as GroqApiResponse;
+
+      if (!response.ok) {
+        const apiError = payload.error?.message ?? `HTTP ${response.status}`;
+        throw new Error(`Groq intent API error (${model}): ${apiError}`);
+      }
+
+      const rawContent = payload.choices?.[0]?.message?.content;
+      if (!rawContent) {
+        throw new Error(`Groq intent API returned an empty completion payload (${model}).`);
+      }
+
+      const parsed = parseIntentJson(rawContent);
+      if (!parsed) {
+        throw new Error(`Groq intent response was not valid JSON (${model}).`);
+      }
+
+      return parsed;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Unknown intent detection error");
+    } finally {
+      clearTimeout(requestTimeout);
     }
-
-    const rawContent = payload.choices?.[0]?.message?.content;
-    if (!rawContent) {
-      throw new Error("Groq intent API returned an empty completion payload.");
-    }
-
-    const parsed = parseIntentJson(rawContent);
-    if (!parsed) {
-      throw new Error("Groq intent response was not valid JSON.");
-    }
-
-    return parsed;
-  } finally {
-    clearTimeout(requestTimeout);
   }
+
+  throw lastError ?? new Error("No valid intent model candidates available.");
 }
 
 async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGroqResponse> {
