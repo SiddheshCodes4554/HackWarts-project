@@ -3,7 +3,7 @@
 import { useUser } from '@/context/UserContext';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, User, Menu, X } from 'lucide-react';
+import { LogOut, Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { LocationUpdateToast } from '@/components/LocationUpdateToast';
 
@@ -172,13 +172,6 @@ export default function RootLayoutClient({
                   <p className="font-semibold text-gray-900">{profile?.name || user.email}</p>
                   <p className="text-sm text-gray-600">{profile?.primary_crop}</p>
                 </div>
-                <Link
-                  href="/(tabs)/profile"
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="View Profile"
-                >
-                  <User className="w-5 h-5 text-gray-600" />
-                </Link>
                 <button
                   onClick={handleLogout}
                   className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600"

@@ -5,12 +5,13 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000;
+const TIMEOUT_SENTINEL = Symbol('timeout');
 
-function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
+async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number): Promise<T | typeof TIMEOUT_SENTINEL> {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const timeout = new Promise<T>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  const timeout = new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
+    timer = setTimeout(() => resolve(TIMEOUT_SENTINEL), timeoutMs);
   });
 
   return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
@@ -93,9 +94,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           .eq('id', userId)
           .single(),
         AUTH_BOOTSTRAP_TIMEOUT_MS,
-        'Profile fetch',
-      ) as { data: UserProfile | null; error: { code?: string; message?: string } | null };
-      const { data, error: fetchError } = profileResult;
+      );
+
+      if (profileResult === TIMEOUT_SENTINEL) {
+        setProfile(null);
+        return;
+      }
+
+      const typedProfileResult = profileResult as {
+        data: UserProfile | null;
+        error: { code?: string; message?: string } | null;
+      };
+
+      const { data, error: fetchError } = typedProfileResult;
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
@@ -114,9 +125,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        const sessionResult = await withTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS);
+
+        if (sessionResult === TIMEOUT_SENTINEL) {
+          setUser(null);
+          setProfile(null);
+          return;
+        }
+
         const {
           data: { session },
-        } = await withTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS, 'Auth session');
+        } = sessionResult as {
+          data: { session: Session | null };
+        };
 
         if (session?.user) {
           setUser(session.user);

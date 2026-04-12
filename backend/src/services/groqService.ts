@@ -58,6 +58,43 @@ function fallbackResponse(message: string, intent = "fallback_advice"): Structur
   };
 }
 
+function localFallbackResponse(prompt: string, intent: string): StructuredGroqResponse {
+  const q = prompt.toLowerCase();
+
+  if (/\b(price|mandi|rate|sell|buy)\b/.test(q)) {
+    return fallbackResponse(
+      "Live market AI is unavailable right now. Check the latest mandi rates in the Market tab, compare district trends, and avoid selling into a weak price window if you can wait.",
+      intent,
+    );
+  }
+
+  if (/\b(loan|scheme|subsidy|finance|credit|insurance)\b/.test(q)) {
+    return fallbackResponse(
+      "Live finance AI is unavailable right now. Review government schemes, compare repayment terms carefully, and prefer low-risk options with clear eligibility and support terms.",
+      intent,
+    );
+  }
+
+  if (/\b(weather|rain|temperature|humidity|storm|heat)\b/.test(q)) {
+    return fallbackResponse(
+      "Live weather AI is unavailable right now. Check the weather card on the dashboard, postpone spraying before rain, and protect sensitive crops during heat or storm periods.",
+      intent,
+    );
+  }
+
+  if (/\b(crop|plant|grow|disease|pest|leaf|wilt|fungus|blight|spot)\b/.test(q)) {
+    return fallbackResponse(
+      "Live crop AI is unavailable right now. Inspect the crop closely, note the affected area and symptoms, and use the Crop Advisory tools for a quick fallback check before applying treatment.",
+      intent,
+    );
+  }
+
+  return fallbackResponse(
+    "Live AI is unavailable right now. Share a crop, weather, market, or finance question and I’ll still help with a practical fallback response.",
+    intent,
+  );
+}
+
 function defaultIntentResult(intent: SupportedIntent = "general_query"): IntentDetectionResult {
   return {
     intent,
@@ -388,10 +425,7 @@ export async function generateResponse(prompt: string): Promise<StructuredGroqRe
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return fallbackResponse(
-      "Groq integration is not configured yet. Add GROQ_API_KEY to the backend environment.",
-      "configuration_required",
-    );
+    return localFallbackResponse(cleanedPrompt, "configuration_required");
   }
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -401,10 +435,7 @@ export async function generateResponse(prompt: string): Promise<StructuredGroqRe
       const isLastAttempt = attempt === MAX_RETRIES;
       if (isLastAttempt) {
         console.error("Groq request failed", error);
-        return fallbackResponse(
-          "I could not fetch a live AI response right now. Please retry in a moment.",
-          "service_unavailable",
-        );
+        return localFallbackResponse(cleanedPrompt, "service_unavailable");
       }
     }
   }
