@@ -97,12 +97,16 @@ export default function RegisterPage() {
       if (signUpError) {
         const message = signUpError.message || 'Registration failed';
         const lowerMessage = message.toLowerCase();
-
-        if (
+        const looksExistingAccountError =
+          lowerMessage.includes('already registered') ||
+          lowerMessage.includes('already been registered') ||
+          lowerMessage.includes('user already registered');
+        const looksRateLimitedError =
           signUpError.status === 429 ||
           lowerMessage.includes('rate limit') ||
-          lowerMessage.includes('over_email_send_rate_limit')
-        ) {
+          lowerMessage.includes('over_email_send_rate_limit');
+
+        if (looksRateLimitedError || looksExistingAccountError) {
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email: normalizedEmail,
             password,
@@ -121,11 +125,14 @@ export default function RegisterPage() {
             return;
           }
 
-          const waitFor = parseRetrySeconds(message);
-          setRetryAfterSeconds(waitFor);
-          setError(`Too many signup attempts. Please wait ${waitFor}s before retrying, or sign in if your account already exists.`);
-        } else if (lowerMessage.includes('already registered')) {
-          setError('This email is already registered. Please sign in instead.');
+          if (looksRateLimitedError) {
+            const waitFor = parseRetrySeconds(message);
+            setRetryAfterSeconds(waitFor);
+          }
+
+          // Avoid trapping users on signup during evaluation if account likely exists.
+          router.push(`/login?email=${encodeURIComponent(normalizedEmail)}&from=register`);
+          return;
         } else {
           setError(message);
         }

@@ -371,11 +371,16 @@ export default function HomePage() {
   const router = useRouter();
   const { user, profile, profileStatus, loading: userLoading } = useUser();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [chartsReady, setChartsReady] = useState(false);
   const dashboardApiBase = useMemo(() => resolveDashboardBaseUrl(), []);
 
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
   const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
   const effectivePlaceName = profile?.location_name || placeName;
+
+  useEffect(() => {
+    setChartsReady(true);
+  }, []);
 
   useEffect(() => {
     if (!userLoading && !user) {
@@ -561,18 +566,20 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-6 h-72 rounded-2xl bg-slate-50 p-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data?.weather.forecast ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="temp" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="rain" orientation="right" tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar yAxisId="rain" dataKey="rainProbability" fill="#93c5fd" radius={[6, 6, 0, 0]} />
-                  <Line yAxisId="temp" type="monotone" dataKey="temperature" stroke="#16a34a" strokeWidth={3} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="mt-6 h-72 min-h-[18rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                  <LineChart data={data?.weather.forecast ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="temp" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="rain" orientation="right" tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar yAxisId="rain" dataKey="rainProbability" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+                    <Line yAxisId="temp" type="monotone" dataKey="temperature" stroke="#16a34a" strokeWidth={3} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </motion.article>
 
@@ -585,20 +592,22 @@ export default function HomePage() {
             <h2 className="text-xl font-semibold text-slate-900">Soil Intelligence</h2>
             <p className="mt-2 text-sm text-slate-600">pH, nutrients and health score from SoilGrids for your live location.</p>
 
-            <div className="mt-4 h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  innerRadius="65%"
-                  outerRadius="100%"
-                  barSize={18}
-                  data={[{ name: "Health", value: data?.soil.healthScore ?? 0 }]}
-                  startAngle={180}
-                  endAngle={0}
-                >
-                  <RadialBar dataKey="value" cornerRadius={8} fill="#16a34a" />
-                  <Tooltip />
-                </RadialBarChart>
-              </ResponsiveContainer>
+            <div className="mt-4 h-52 min-h-[13rem] min-w-0">
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+                  <RadialBarChart
+                    innerRadius="65%"
+                    outerRadius="100%"
+                    barSize={18}
+                    data={[{ name: "Health", value: data?.soil.healthScore ?? 0 }]}
+                    startAngle={180}
+                    endAngle={0}
+                  >
+                    <RadialBar dataKey="value" cornerRadius={8} fill="#16a34a" />
+                    <Tooltip />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              ) : null}
               <p className="-mt-7 text-center text-lg font-semibold text-slate-900">{(data?.soil.healthScore ?? 0).toFixed(0)}/100</p>
             </div>
 
@@ -641,32 +650,36 @@ export default function HomePage() {
 
             <p className="mt-2 text-sm text-slate-600">Best mandi: <span className="font-semibold text-slate-900">{data?.market.bestMarket ?? "--"}</span></p>
 
-            <div className="mt-5 h-64 rounded-2xl bg-slate-50 p-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data?.market.markets.slice(0, 3) ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dcfce7" />
-                  <XAxis dataKey="mandi" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Bar dataKey="modalPrice" radius={[8, 8, 0, 0]}>
-                    {(data?.market.markets.slice(0, 3) ?? []).map((entry, index) => (
-                      <Cell key={`${entry.mandi}-${index}`} fill={index === 0 ? "#16a34a" : "#86efac"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="mt-5 h-64 min-h-[16rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                  <BarChart data={data?.market.markets.slice(0, 3) ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dcfce7" />
+                    <XAxis dataKey="mandi" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Bar dataKey="modalPrice" radius={[8, 8, 0, 0]}>
+                      {(data?.market.markets.slice(0, 3) ?? []).map((entry, index) => (
+                        <Cell key={`${entry.mandi}-${index}`} fill={index === 0 ? "#16a34a" : "#86efac"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
 
-            <div className="mt-5 h-56 rounded-2xl bg-slate-50 p-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data?.market.trend ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dcfce7" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Area type="monotone" dataKey="price" stroke="#0284c7" fill="#bae6fd" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="mt-5 h-56 min-h-[14rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+                  <AreaChart data={data?.market.trend ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dcfce7" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Area type="monotone" dataKey="price" stroke="#0284c7" fill="#bae6fd" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </motion.article>
 

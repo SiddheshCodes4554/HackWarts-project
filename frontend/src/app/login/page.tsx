@@ -23,6 +23,20 @@ export default function LoginPage() {
   const isBuyer = String(roleSource).toLowerCase() === 'buyer';
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const emailFromQuery = params.get('email')?.trim() ?? '';
+    const fromRegister = params.get('from') === 'register';
+
+    if (emailFromQuery && !email) {
+      setEmail(emailFromQuery);
+    }
+
+    if (fromRegister && !error) {
+      setError('Signup is temporarily rate-limited or the account already exists. Please sign in to continue.');
+    }
+  }, [email, error]);
+
+  useEffect(() => {
     if (userLoading) {
       return;
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
@@ -91,6 +91,11 @@ export default function CommodityDetailsPage() {
   const router = useRouter();
   const params = useParams<{ commodity: string }>();
   const { profile } = useUser();
+  const [chartsReady, setChartsReady] = useState(false);
+
+  useEffect(() => {
+    setChartsReady(true);
+  }, []);
 
   const district = normalizeLocationPart(profile?.location_name?.split(",")[0] ?? "") || "Pune";
   const state = normalizeLocationPart(profile?.location_name?.split(",")[1] ?? "") || "Maharashtra";
@@ -168,16 +173,18 @@ export default function CommodityDetailsPage() {
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
               <TrendingUp className="h-4 w-4 text-emerald-600" /> 7-Day Price Trend
             </div>
-            <div className="h-72 rounded-2xl bg-slate-50 p-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data?.priceTrend ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value) => formatPrice(Number(value))} />
-                  <Line type="monotone" dataKey="price" stroke="#16a34a" strokeWidth={3} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="h-72 min-h-[18rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                  <LineChart data={data?.priceTrend ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value) => formatPrice(Number(value))} />
+                    <Line type="monotone" dataKey="price" stroke="#16a34a" strokeWidth={3} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </article>
 
@@ -185,16 +192,18 @@ export default function CommodityDetailsPage() {
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
               <Store className="h-4 w-4 text-sky-700" /> Top 3 Mandis
             </div>
-            <div className="h-72 rounded-2xl bg-slate-50 p-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data?.topMandis ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="market" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value) => formatPrice(Number(value))} />
-                  <Bar dataKey="modalPrice" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-72 min-h-[18rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                  <BarChart data={data?.topMandis ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="market" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value) => formatPrice(Number(value))} />
+                    <Bar dataKey="modalPrice" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </article>
         </section>
