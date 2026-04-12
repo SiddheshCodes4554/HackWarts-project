@@ -1,3 +1,5 @@
+import { pickGroqApiKey } from "./groqKeys";
+
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 const GROQ_INTENT_MODEL = process.env.GROQ_INTENT_MODEL ?? "llama3-70b-8192";
@@ -50,16 +52,6 @@ type GroqJsonRequest = {
   temperature?: number;
   maxTokens?: number;
 };
-
-function resolveGroqApiKey(): string | undefined {
-  return (
-    process.env.GROQ_API_KEY?.trim() ||
-    process.env.GROQ_FINANCE_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GROQ_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GROQ_FINANCE_API_KEY?.trim() ||
-    undefined
-  );
-}
 
 function fallbackResponse(message: string, intent = "fallback_advice"): StructuredGroqResponse {
   return {
@@ -359,7 +351,7 @@ async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGr
 }
 
 export async function requestGroqJson<T>(request: GroqJsonRequest, fallback: T): Promise<T> {
-  const apiKey = resolveGroqApiKey();
+  const apiKey = pickGroqApiKey();
   if (!apiKey) {
     return fallback;
   }
@@ -433,7 +425,7 @@ export async function generateResponse(prompt: string): Promise<StructuredGroqRe
     );
   }
 
-  const apiKey = resolveGroqApiKey();
+  const apiKey = pickGroqApiKey();
   if (!apiKey) {
     return localFallbackResponse(cleanedPrompt, "configuration_required");
   }
@@ -468,7 +460,7 @@ export async function detectIntent(query: string): Promise<IntentDetectionResult
     };
   }
 
-  const apiKey = resolveGroqApiKey();
+  const apiKey = pickGroqApiKey();
   if (!apiKey) {
     console.warn("Intent detection fallback: GROQ_API_KEY missing");
     return {

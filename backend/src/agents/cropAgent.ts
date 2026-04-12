@@ -1,4 +1,5 @@
 import { buildCropContext } from "../services/cropContextBuilder";
+import { pickGroqApiKey } from "../services/groqKeys";
 import {
   AgentContext,
   CropAdviceInput,
@@ -133,7 +134,7 @@ function buildCropPrompt(
 }
 
 async function groqCompletion(prompt: string): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = pickGroqApiKey();
   if (!apiKey) {
     throw new Error("GROQ_API_KEY is required for crop advisory");
   }

@@ -8,7 +8,7 @@ import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, profile, loading: userLoading } = useUser();
+  const { user, profile, profileStatus, loading: userLoading } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [accountRole, setAccountRole] = useState<'farmer' | 'buyer'>('farmer');
@@ -28,9 +28,16 @@ export default function LoginPage() {
     }
 
     if (user) {
-      router.replace(profile ? (isBuyer ? '/bidding-dashboard' : '/home') : '/onboarding');
+      if (profileStatus === 'missing') {
+        router.replace('/onboarding');
+        return;
+      }
+
+      if (profileStatus === 'ready' && profile) {
+        router.replace(isBuyer ? '/bidding-dashboard' : '/home');
+      }
     }
-  }, [isBuyer, user, profile, userLoading, router]);
+  }, [isBuyer, user, profile, profileStatus, userLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +73,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-linear-to-br from-green-50 to-blue-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>

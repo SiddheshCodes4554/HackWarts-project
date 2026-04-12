@@ -1,19 +1,10 @@
 import { getEligibleSchemes } from "../services/eligibilityEngine";
+import { pickGroqApiKey } from "../services/groqKeys";
 import { AgentContext, AgentResult, FinancialAdviceResult, FinancialUserProfile, GovernmentScheme } from "../utils/types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const FINANCE_MODEL = process.env.GROQ_FINANCE_MODEL ?? "llama-3.3-70b-versatile";
 const FINANCE_TIMEOUT_MS = 7000;
-
-function resolveGroqApiKey(): string | undefined {
-  return (
-    process.env.GROQ_API_KEY?.trim() ||
-    process.env.GROQ_FINANCE_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GROQ_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GROQ_FINANCE_API_KEY?.trim() ||
-    undefined
-  );
-}
 
 type GroqPayload = {
   choices?: Array<{
@@ -218,7 +209,7 @@ function parseCompletion(raw: string): AdvisoryCompletion | null {
 }
 
 async function groqCompletion(prompt: string): Promise<string> {
-  const apiKey = resolveGroqApiKey();
+  const apiKey = pickGroqApiKey();
   if (!apiKey) {
     throw new Error("GROQ_API_KEY is required for finance advice");
   }

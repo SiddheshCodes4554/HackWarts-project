@@ -369,7 +369,7 @@ function trendBadge(value: number): { label: string; color: string; Icon: typeof
 export default function HomePage() {
   const { latitude, longitude, placeName, isDetecting } = useLocation();
   const router = useRouter();
-  const { user, profile, loading: userLoading } = useUser();
+  const { user, profile, profileStatus, loading: userLoading } = useUser();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const dashboardApiBase = useMemo(() => resolveDashboardBaseUrl(), []);
 
@@ -378,10 +378,15 @@ export default function HomePage() {
   const effectivePlaceName = profile?.location_name || placeName;
 
   useEffect(() => {
-    if (!userLoading && (!user || !profile)) {
-      router.replace(user ? "/onboarding" : "/login");
+    if (!userLoading && !user) {
+      router.replace("/login");
+      return;
     }
-  }, [user, profile, userLoading, router]);
+
+    if (!userLoading && user && profileStatus === "missing") {
+      router.replace("/onboarding");
+    }
+  }, [profileStatus, user, userLoading, router]);
 
   const dashboardKey =
     Number.isFinite(effectiveLatitude) && Number.isFinite(effectiveLongitude)
@@ -428,7 +433,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-[linear-gradient(150deg,#f2fbf4_0%,#eef9ff_45%,#f5fff7_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-10">
-        <section className="rounded-[2rem] border border-emerald-200/70 bg-white/80 p-6 shadow-[0_30px_100px_rgba(22,163,74,0.09)] backdrop-blur-sm sm:p-8">
+        <section className="rounded-4xl border border-emerald-200/70 bg-white/80 p-6 shadow-[0_30px_100px_rgba(22,163,74,0.09)] backdrop-blur-sm sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Farm Analytics Console</p>

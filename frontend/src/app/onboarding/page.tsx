@@ -10,7 +10,7 @@ import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, profile, loading: userLoading, refreshProfile } = useUser();
+  const { user, profile, profileStatus, loading: userLoading, refreshProfile } = useUser();
   const { setLocation } = useLocation();
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
@@ -41,10 +41,10 @@ export default function OnboardingPage() {
     }
 
     // Logged-in users with completed profile should not return to onboarding.
-    if (profile) {
+    if (profileStatus === 'ready' && profile) {
       router.replace(isBuyer ? '/bidding-dashboard' : '/home');
     }
-  }, [isBuyer, user, profile, userLoading, router]);
+  }, [isBuyer, user, profile, profileStatus, userLoading, router]);
 
   const requestGPSLocation = async () => {
     setGpsLoading(true);
@@ -171,14 +171,14 @@ export default function OnboardingPage() {
 
   if (userLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-green-50 to-blue-50 flex items-center justify-center">
         <Loader className="w-8 h-8 text-green-600 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 px-4 py-8">
+    <div className="min-h-screen bg-linear-to-br from-green-50 to-blue-50 px-4 py-8">
       <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Complete Your Profile</h1>
@@ -187,7 +187,7 @@ export default function OnboardingPage() {
 
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}

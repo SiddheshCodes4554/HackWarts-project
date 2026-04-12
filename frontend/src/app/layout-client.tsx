@@ -14,7 +14,7 @@ export default function RootLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, profile, loading } = useUser();
+  const { user, profile, profileStatus, loading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -42,12 +42,12 @@ export default function RootLayoutClient({
 
     // Logged-in users should not reach login/register.
     if (user && (isLogin || isRegister)) {
-      router.replace(profile ? (isBuyer ? '/bidding-dashboard' : '/home') : '/onboarding');
+      router.replace(profileStatus === 'ready' && profile ? (isBuyer ? '/bidding-dashboard' : '/home') : '/home');
       return;
     }
 
     // Onboarding is only for users without completed profile.
-    if (user && profile && isOnboarding) {
+    if (user && profileStatus === 'ready' && profile && isOnboarding) {
       router.replace(isBuyer ? '/bidding-dashboard' : '/home');
       return;
     }
@@ -59,16 +59,16 @@ export default function RootLayoutClient({
     }
 
     // Authenticated users without profile should complete onboarding first.
-    if (user && !profile && !isOnboarding && !isLogin && !isRegister && pathname !== '/') {
+    if (user && profileStatus === 'missing' && !isOnboarding && !isLogin && !isRegister && pathname !== '/') {
       router.replace('/onboarding');
       return;
     }
 
     // Buyers should only access bidding dashboard and profile screens.
-    if (user && profile && isBuyer && !isPublicAuthRoute && pathname !== '/' && !BUYER_ALLOWED_ROUTES.has(pathname)) {
+    if (user && profileStatus === 'ready' && profile && isBuyer && !isPublicAuthRoute && pathname !== '/' && !BUYER_ALLOWED_ROUTES.has(pathname)) {
       router.replace('/bidding-dashboard');
     }
-  }, [isBuyer, loading, pathname, profile, router, user]);
+  }, [isBuyer, loading, pathname, profile, profileStatus, router, user]);
 
   const handleLogout = async () => {
     try {

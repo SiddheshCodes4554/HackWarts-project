@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 
 export default function HomeRedirect() {
   const router = useRouter();
-  const { user, profile, loading } = useUser();
+  const { user, profile, profileStatus, loading } = useUser();
   const roleSource =
     (typeof profile?.role === 'string' && profile.role) ||
     (typeof profile?.user_type === 'string' && profile.user_type) ||
@@ -28,18 +28,18 @@ export default function HomeRedirect() {
     }
 
     // If authenticated but no profile, redirect to onboarding
-    if (!profile) {
+    if (profileStatus === 'missing') {
       router.replace('/onboarding');
       return;
     }
 
     // If fully set up, redirect to home
     router.replace(isBuyer ? '/bidding-dashboard' : '/home');
-  }, [isBuyer, user, profile, loading, router]);
+  }, [isBuyer, user, profile, profileStatus, loading, router]);
 
   // Show loading state while checking auth
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 to-blue-50">
       <div className="text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
         <p className="text-gray-600">Loading FarmEase...</p>

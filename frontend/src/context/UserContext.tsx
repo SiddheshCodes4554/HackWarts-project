@@ -41,6 +41,7 @@ export interface UserContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  profileStatus: 'loading' | 'ready' | 'missing' | 'unknown' | 'anonymous';
   error: string | null;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -69,6 +70,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileStatus, setProfileStatus] = useState<UserContextType['profileStatus']>('loading');
   const [error, setError] = useState<string | null>(null);
 
   const clearLocalSession = async () => {
@@ -80,6 +82,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     setUser(null);
     setProfile(null);
+    setProfileStatus('anonymous');
     setError(null);
   };
 
@@ -87,6 +90,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = async (userId: string) => {
     try {
       setError(null);
+      setProfileStatus('loading');
       const profileResult = await withTimeout(
         supabase
           .from('profiles')
@@ -97,7 +101,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (profileResult === TIMEOUT_SENTINEL) {
-        setProfile(null);
+        setProfileStatus('unknown');
         return;
       }
 
@@ -112,11 +116,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         throw fetchError;
       }
 
+      if (fetchError?.code === 'PGRST116' || !data) {
+        setProfile(null);
+        setProfileStatus('missing');
+        return;
+      }
+
       if (data) {
         setProfile(data);
+        setProfileStatus('ready');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+      setProfileStatus('unknown');
       setError(err instanceof Error ? err.message : 'Failed to fetch profile');
     }
   };
@@ -130,6 +142,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (sessionResult === TIMEOUT_SENTINEL) {
           setUser(null);
           setProfile(null);
+          setProfileStatus('unknown');
           return;
         }
 
@@ -145,12 +158,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null);
           setProfile(null);
+          setProfileStatus('anonymous');
         }
       } catch (err) {
         if (isInvalidRefreshTokenError(err)) {
           await clearLocalSession();
         } else {
           console.error('Error checking auth:', err);
+          setProfileStatus('unknown');
           setError(err instanceof Error ? err.message : 'Auth error');
         }
       } finally {
@@ -168,6 +183,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
         setProfile(null);
+        setProfileStatus('anonymous');
       }
     });
 
@@ -213,6 +229,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
+    profileStatus,
     error,
     updateProfile,
     refreshProfile,
