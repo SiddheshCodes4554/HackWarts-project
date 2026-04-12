@@ -174,9 +174,9 @@ export default function FinancePage() {
   const topSchemes = advice?.schemes.slice(0, 3) ?? [];
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#eef9e3_0%,#f8fcf5_40%,#f1f6ec_100%)] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+    <main className="text-slate-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <section className="rounded-[2rem] border border-lime-200/80 bg-white/95 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] sm:p-8">
+        <section className="rounded-4xl border border-lime-200/80 bg-white/95 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-3 text-sm font-semibold text-lime-800">

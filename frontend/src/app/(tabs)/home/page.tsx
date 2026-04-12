@@ -431,8 +431,8 @@ export default function HomePage() {
   const marketBadge = trendBadge(overview.marketTrendPct);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(150deg,#f2fbf4_0%,#eef9ff_45%,#f5fff7_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-10">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-10 text-slate-900">
+      <div className="flex w-full flex-col gap-6">
         <section className="rounded-4xl border border-emerald-200/70 bg-white/80 p-6 shadow-[0_30px_100px_rgba(22,163,74,0.09)] backdrop-blur-sm sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>

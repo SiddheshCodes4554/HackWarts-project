@@ -257,8 +257,8 @@ export default function AssistantPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-      <section className="rounded-[2rem] border border-lime-200/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(40,72,18,0.08)] sm:p-6">
+    <main className="flex flex-col text-slate-900">
+      <section className="rounded-4xl border border-lime-200/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(40,72,18,0.08)] sm:p-6">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-700">
@@ -284,7 +284,7 @@ export default function AssistantPage() {
 
       <div className="mt-6 flex gap-4 flex-1 min-h-0">
         {/* Chat Area */}
-        <section className="relative flex flex-1 flex-col overflow-hidden rounded-[2rem] border border-lime-100 bg-white/95 shadow-sm">
+        <section className="relative flex flex-1 flex-col overflow-hidden rounded-4xl border border-lime-100 bg-white/95 shadow-sm">
           <div className="flex items-center justify-between border-b border-lime-100 bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 sm:px-6">
             <span>Live chat</span>
             <span className="rounded-full bg-lime-50 px-3 py-1 text-lime-800 ring-1 ring-lime-100">

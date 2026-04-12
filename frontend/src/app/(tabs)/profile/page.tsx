@@ -133,17 +133,17 @@ export default function ProfilePage() {
 
   if (userLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+      <main className="flex min-h-[40vh] items-center justify-center">
         <Loader className="w-8 h-8 text-green-600 animate-spin" />
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+    <main className="text-slate-900">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         {/* Header Section */}
-        <section className="rounded-[2rem] border border-lime-200/80 bg-white/95 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] sm:p-8">
+        <section className="rounded-4xl border border-lime-200/80 bg-white/95 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] sm:p-8">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-lime-700">Farmer Profile</p>

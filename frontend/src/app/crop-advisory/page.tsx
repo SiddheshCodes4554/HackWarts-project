@@ -146,19 +146,28 @@ async function optimizeImageForUpload(file: File): Promise<string> {
 
 export default function CropAdvisoryPage() {
   const { latitude, longitude, placeName } = useLocation();
-    const router = useRouter();
-    const { user, profile } = useUser();
+  const router = useRouter();
+  const { user, profile, loading: userLoading, profileStatus } = useUser();
 
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
   const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
   const effectivePlaceName = profile?.location_name || placeName;
   
-    // Protect route
-    useEffect(() => {
-      if (!user || !profile) {
-        router.push(user ? '/onboarding' : '/login');
-      }
-    }, [user, profile, router]);
+  // Protect route
+  useEffect(() => {
+    if (userLoading) {
+      return;
+    }
+
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+
+    if (profileStatus === 'missing') {
+      router.replace('/onboarding');
+    }
+  }, [profileStatus, router, user, userLoading]);
 
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -255,9 +264,9 @@ export default function CropAdvisoryPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+    <main className="text-slate-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-8">
-        <section className="rounded-[2rem] border border-lime-200/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] backdrop-blur-sm sm:p-8">
+        <section className="rounded-4xl border border-lime-200/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] backdrop-blur-sm sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-lime-700">Crop Advisory</p>

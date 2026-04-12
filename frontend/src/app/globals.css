@@ -2,8 +2,12 @@
 @import "leaflet/dist/leaflet.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #edf6ea;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-soft: #f7fbf5;
+  --border-soft: #d9e7d3;
+  --accent: #2f7a2f;
 }
 
 @theme inline {
@@ -13,17 +17,20 @@
   --font-mono: "Source Code Pro", "Consolas", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+  min-height: 100vh;
+}
+
+* {
+  border-color: var(--border-soft);
+}
+
+::selection {
+  background: #cdebc8;
+  color: #09330f;
 }
 
 /* Keep form controls readable regardless of OS color scheme preference. */
@@ -33,6 +40,7 @@ select {
   color: #0f172a;
   background-color: #ffffff;
   caret-color: #0f172a;
+  border-radius: 0.75rem;
 }
 
 input::placeholder,
@@ -59,4 +67,16 @@ select:-webkit-autofill:hover,
 select:-webkit-autofill:focus {
   -webkit-text-fill-color: #0f172a;
   transition: background-color 5000s ease-in-out 0s;
+}
+
+.app-surface {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 1.25rem;
+}
+
+.app-surface-soft {
+  background: var(--surface-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 1rem;
 }

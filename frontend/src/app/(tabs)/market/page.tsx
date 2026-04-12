@@ -181,9 +181,9 @@ export default function MarketPage() {
   }, [allSuggestions, category]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+    <main className="text-slate-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-24">
-        <section className="rounded-[2rem] border border-lime-200/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] backdrop-blur-sm sm:p-8">
+        <section className="rounded-4xl border border-lime-200/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(48,83,23,0.08)] backdrop-blur-sm sm:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-lime-700">
