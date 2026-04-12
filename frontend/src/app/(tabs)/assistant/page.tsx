@@ -43,11 +43,7 @@ type ChatApiResponse = {
   finance?: SectionData;
 };
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  ""
-).replace(/\/$/, "");
+const CHAT_API_PATH = "/api/chat";
 const CHAT_TIMEOUT_MS = 15000;
 
 function toDisplayText(value: unknown): string {
@@ -126,16 +122,25 @@ function renderSectionRows(section: SectionData): Array<[string, string]> {
 
 export default function AssistantPage() {
   const { latitude, longitude, placeName } = useLocation();
-  const { user, profile } = useUser();
+  const { user, profile, profileStatus, loading: userLoading } = useUser();
   const { history, addToHistory, clear } = useChatHistory();
-    const router = useRouter();
+  const router = useRouter();
   
-    // Protect route - must be authenticated and have completed onboarding
-    useEffect(() => {
-      if (!user || !profile) {
-        router.push(user ? '/onboarding' : '/login');
-      }
-    }, [user, profile, router]);
+  // Protect route - wait for auth/profile bootstrap to settle before redirecting.
+  useEffect(() => {
+    if (userLoading) {
+      return;
+    }
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    if (profileStatus === "missing") {
+      router.replace("/onboarding");
+    }
+  }, [profileStatus, router, user, userLoading]);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -184,7 +189,7 @@ export default function AssistantPage() {
     const timeoutId = window.setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/chat`, {
+      const response = await fetch(CHAT_API_PATH, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

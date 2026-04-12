@@ -10,6 +10,7 @@ import { financeRouter } from "./routes/finance";
 import { marketRouter } from "./routes/market";
 import { userLocationRouter } from "./routes/userLocation";
 import { weatherRouter } from "./routes/weather";
+import { getGroqApiKeys } from "./services/groqKeys";
 
 dotenv.config({
   path: path.resolve(__dirname, "..", ".env"),
@@ -17,15 +18,6 @@ dotenv.config({
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
-
-function getRequiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
-}
 
 function normalizeOrigin(value: string): string {
   return value.trim().replace(/\/+$/, "");
@@ -35,17 +27,20 @@ function getOptionalEnv(name: string): string {
   return process.env[name]?.trim() ?? "";
 }
 
-// Keep only truly required runtime configuration as hard-fail.
-const GROQ_API_KEY = getRequiredEnv("GROQ_API_KEY");
+const groqKeys = getGroqApiKeys();
 const SUPABASE_URL = getOptionalEnv("SUPABASE_URL");
 const SUPABASE_ANON_KEY = getOptionalEnv("SUPABASE_ANON_KEY");
+
+if (groqKeys.length === 0) {
+  console.warn("No Groq API key configured; assistant will run with local fallbacks.");
+}
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn("SUPABASE_URL or SUPABASE_ANON_KEY is missing; continuing startup with limited features.");
 }
 
-// Prevent lint/TS unused complaints while still enforcing env validation at boot.
-void GROQ_API_KEY;
+// Prevent lint/TS unused complaints while still running startup diagnostics.
+void groqKeys;
 void SUPABASE_URL;
 void SUPABASE_ANON_KEY;
 
