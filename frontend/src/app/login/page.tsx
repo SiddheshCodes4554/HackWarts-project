@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import { loginOrSignup } from '@/lib/authFlow';
 import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
@@ -13,7 +14,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [accountRole, setAccountRole] = useState<'farmer' | 'buyer'>('farmer');
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const roleSource =
     (typeof profile?.role === 'string' && profile.role) ||
     (typeof profile?.user_type === 'string' && profile.user_type) ||
@@ -21,6 +25,24 @@ export default function LoginPage() {
     (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
     accountRole;
   const isBuyer = String(roleSource).toLowerCase() === 'buyer';
+
+  useEffect(() => {
+    if (cooldownUntil <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const remainingMs = Math.max(0, cooldownUntil - Date.now());
+      setCooldownSeconds(Math.ceil(remainingMs / 1000));
+      if (remainingMs <= 0) {
+        setCooldownUntil(0);
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [cooldownUntil]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -55,32 +77,39 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const now = Date.now();
+    if (loading || now < cooldownUntil) {
+      return;
+    }
+
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
+    setCooldownUntil(now + 2000);
+    setCooldownSeconds(2);
 
     try {
-      const { data, error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const result = await loginOrSignup(email, password, accountRole);
 
-      if (loginError) {
-        setError(loginError.message);
-      } else {
-        const metadataRole = typeof data.user?.user_metadata?.role === 'string'
-          ? data.user.user_metadata.role.toLowerCase()
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      const metadataRole = typeof result.user?.user_metadata?.role === 'string'
+          ? result.user.user_metadata.role.toLowerCase()
           : '';
 
-        if (metadataRole && metadataRole !== accountRole) {
-          await supabase.auth.signOut();
-          setError(`This account is registered as ${metadataRole}. Please choose ${metadataRole} login.`);
-          return;
-        }
-
-        router.replace('/');
+      if (metadataRole && metadataRole !== accountRole) {
+        await supabase.auth.signOut();
+        setError(`This account is registered as ${metadataRole}. Please choose ${metadataRole} login.`);
+        return;
       }
+
+      setSuccessMessage(result.mode === 'signup' ? 'Account created successfully. Redirecting...' : 'Signed in successfully. Redirecting...');
+      router.replace('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError('Unable to authenticate right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -97,6 +126,12 @@ export default function LoginPage() {
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            {successMessage}
           </div>
         )}
 
@@ -161,10 +196,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || cooldownSeconds > 0}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Processing...' : cooldownSeconds > 0 ? `Please wait ${cooldownSeconds}s` : 'Continue'}
           </button>
         </form>
 

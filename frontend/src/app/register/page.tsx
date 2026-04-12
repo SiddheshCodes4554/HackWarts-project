@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import { loginOrSignup } from '@/lib/authFlow';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -14,59 +15,40 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   useEffect(() => {
-    if (retryAfterSeconds <= 0) {
+    if (cooldownUntil <= 0) {
       return;
     }
 
     const timer = window.setInterval(() => {
-      setRetryAfterSeconds((current) => (current > 0 ? current - 1 : 0));
+      const remainingMs = Math.max(0, cooldownUntil - Date.now());
+      setCooldownSeconds(Math.ceil(remainingMs / 1000));
+      if (remainingMs <= 0) {
+        setCooldownUntil(0);
+      }
     }, 1000);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [retryAfterSeconds]);
-
-  const parseRetrySeconds = (message: string): number => {
-    const matched = message.match(/(\d+)\s*seconds?/i);
-    if (!matched) {
-      return 60;
-    }
-
-    const parsed = Number(matched[1]);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
-  };
-
-  const upsertInitialProfile = async (userId: string) => {
-    await supabase.from('profiles').upsert(
-      {
-        id: userId,
-        name: '',
-        location_name: '',
-        latitude: 0,
-        longitude: 0,
-        land_area: 0,
-        primary_crop: '',
-        language: 'English',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id', ignoreDuplicates: false },
-    );
-  };
+  }, [cooldownUntil]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
 
-    if (loading || retryAfterSeconds > 0) {
+    const now = Date.now();
+    if (loading || now < cooldownUntil) {
       return;
     }
 
     setLoading(true);
+    setCooldownUntil(now + 2000);
+    setCooldownSeconds(2);
 
     // Validate passwords match
     if (password !== confirmPassword) {
@@ -83,72 +65,27 @@ export default function RegisterPage() {
     }
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-        options: {
-          data: {
-            role: accountRole,
-          },
-        },
-      });
+      const result = await loginOrSignup(email, password, accountRole);
 
-      if (signUpError) {
-        const message = signUpError.message || 'Registration failed';
-        const lowerMessage = message.toLowerCase();
-        const looksExistingAccountError =
-          lowerMessage.includes('already registered') ||
-          lowerMessage.includes('already been registered') ||
-          lowerMessage.includes('user already registered');
-        const looksRateLimitedError =
-          signUpError.status === 429 ||
-          lowerMessage.includes('rate limit') ||
-          lowerMessage.includes('over_email_send_rate_limit');
-
-        if (looksRateLimitedError || looksExistingAccountError) {
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password,
-          });
-
-          if (!signInError) {
-            setSuccessMessage('Account already exists. Signed in successfully, redirecting...');
-            setTimeout(() => {
-              router.push('/');
-            }, 900);
-            return;
-          }
-
-          if ((signInError.message || '').toLowerCase().includes('email not confirmed')) {
-            setError('Your account exists but email is not confirmed yet. Please check your inbox and confirm before signing in.');
-            return;
-          }
-
-          if (looksRateLimitedError) {
-            const waitFor = parseRetrySeconds(message);
-            setRetryAfterSeconds(waitFor);
-          }
-
-          // Avoid trapping users on signup during evaluation if account likely exists.
-          router.push(`/login?email=${encodeURIComponent(normalizedEmail)}&from=register`);
-          return;
-        } else {
-          setError(message);
-        }
-      } else if (data.user) {
-        if (data.session) {
-          await upsertInitialProfile(data.user.id);
-          setSuccessMessage('Signup successful! Redirecting to onboarding...');
-          setTimeout(() => {
-            router.push('/onboarding');
-          }, 1200);
-        } else {
-          setSuccessMessage('Account created. Check your email inbox to confirm your account, then sign in.');
-        }
+      if (!result.ok) {
+        setError(result.message);
+        return;
       }
+
+      const metadataRole = typeof result.user?.user_metadata?.role === 'string'
+        ? result.user.user_metadata.role.toLowerCase()
+        : '';
+
+      if (metadataRole && metadataRole !== accountRole) {
+        await supabase.auth.signOut();
+        setError(`This account is registered as ${metadataRole}. Please switch role and continue.`);
+        return;
+      }
+
+      setSuccessMessage(result.mode === 'signup' ? 'Account created successfully. Redirecting...' : 'Signed in successfully. Redirecting...');
+      router.push('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError('Unable to authenticate right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -250,14 +187,10 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading || retryAfterSeconds > 0}
+            disabled={loading || cooldownSeconds > 0}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading
-              ? 'Creating Account...'
-              : retryAfterSeconds > 0
-                ? `Retry in ${retryAfterSeconds}s`
-                : 'Create Account'}
+            {loading ? 'Processing...' : cooldownSeconds > 0 ? `Please wait ${cooldownSeconds}s` : 'Continue'}
           </button>
         </form>
 
