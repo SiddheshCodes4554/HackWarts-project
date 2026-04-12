@@ -51,6 +51,16 @@ type GroqJsonRequest = {
   maxTokens?: number;
 };
 
+function resolveGroqApiKey(): string | undefined {
+  return (
+    process.env.GROQ_API_KEY?.trim() ||
+    process.env.GROQ_FINANCE_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GROQ_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GROQ_FINANCE_API_KEY?.trim() ||
+    undefined
+  );
+}
+
 function fallbackResponse(message: string, intent = "fallback_advice"): StructuredGroqResponse {
   return {
     intent,
@@ -70,7 +80,7 @@ function localFallbackResponse(prompt: string, intent: string): StructuredGroqRe
 
   if (/\b(loan|scheme|subsidy|finance|credit|insurance)\b/.test(q)) {
     return fallbackResponse(
-      "Live finance AI is unavailable right now. Review government schemes, compare repayment terms carefully, and prefer low-risk options with clear eligibility and support terms.",
+        "Finance guidance: review government schemes, compare repayment terms, interest rate, moratorium, and collateral requirements, then pick the lowest-risk option that fits your crop cycle.",
       intent,
     );
   }
@@ -349,7 +359,7 @@ async function requestGroq(prompt: string, apiKey: string): Promise<StructuredGr
 }
 
 export async function requestGroqJson<T>(request: GroqJsonRequest, fallback: T): Promise<T> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = resolveGroqApiKey();
   if (!apiKey) {
     return fallback;
   }
@@ -423,7 +433,7 @@ export async function generateResponse(prompt: string): Promise<StructuredGroqRe
     );
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = resolveGroqApiKey();
   if (!apiKey) {
     return localFallbackResponse(cleanedPrompt, "configuration_required");
   }
@@ -458,7 +468,7 @@ export async function detectIntent(query: string): Promise<IntentDetectionResult
     };
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = resolveGroqApiKey();
   if (!apiKey) {
     console.warn("Intent detection fallback: GROQ_API_KEY missing");
     return {
