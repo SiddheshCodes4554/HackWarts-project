@@ -207,7 +207,7 @@ export default function AssistantPage() {
       const data = (await response.json().catch(() => ({}))) as ChatApiResponse;
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Unable to process chat request");
+        throw new Error(data.error ?? "Live AI unavailable right now. Please retry.");
       }
 
       setIntent(data.intent ?? "general_support");
@@ -232,7 +232,9 @@ export default function AssistantPage() {
       const errorMessage =
         error instanceof DOMException && error.name === "AbortError"
           ? "The request took too long. Please try again."
-          : "The backend is unreachable right now. Please check the server and retry.";
+          : error instanceof Error
+            ? error.message
+            : "Live AI unavailable right now. Please retry.";
 
       setMessages((current) => [
         ...current,

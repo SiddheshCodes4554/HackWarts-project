@@ -324,7 +324,14 @@ function fallbackCropAdvice(
   };
 }
 
-export async function generateCropAdvice(input: CropAdviceInput): Promise<CropAdviceResult> {
+type CropAdviceOptions = {
+  strict?: boolean;
+};
+
+export async function generateCropAdvice(
+  input: CropAdviceInput,
+  options: CropAdviceOptions = {},
+): Promise<CropAdviceResult> {
   const normalizedInput: CropAdviceInput = {
     ...input,
     crop: sanitizeText(input.crop, ""),
@@ -340,9 +347,13 @@ export async function generateCropAdvice(input: CropAdviceInput): Promise<CropAd
         disease_name: normalizedInput.disease,
         confidence: normalizedInput.diseaseConfidence ?? 100,
       }
-    : await inferDisease(normalizedInput.query || `${normalizedInput.crop ?? ""} crop symptom analysis`).catch(
-        () => ({ disease_name: "Unknown condition", confidence: 0 }),
-      );
+    : await inferDisease(normalizedInput.query || `${normalizedInput.crop ?? ""} crop symptom analysis`).catch((error) => {
+        if (options.strict) {
+          throw error instanceof Error ? error : new Error("Live crop AI unavailable");
+        }
+
+        return { disease_name: "Unknown condition", confidence: 0 };
+      });
 
   const prompt = buildCropPrompt(
     normalizedInput,
@@ -393,6 +404,10 @@ export async function generateCropAdvice(input: CropAdviceInput): Promise<CropAd
       summary: `${validated.disease}. ${validated.root_cause}`,
     };
   } catch (error) {
+    if (options.strict) {
+      throw error instanceof Error ? error : new Error("Live crop AI unavailable");
+    }
+
     console.error("generateCropAdvice fallback", error);
     return fallbackCropAdvice(normalizedInput, context, diseaseInference.disease_name, diseaseInference.confidence);
   }

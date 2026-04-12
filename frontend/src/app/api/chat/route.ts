@@ -45,52 +45,13 @@ function backendCandidates(): string[] {
   return [...new Set(values)];
 }
 
-function localReplyFor(message: string): string {
-  const q = message.toLowerCase();
-
-  if (/\b(crop|leaf|pest|disease|blight|fungus|wilt|spray|symptom)\b/.test(q)) {
-    return "Quick crop fallback: isolate affected plants, inspect underside of leaves, avoid overwatering, and apply treatment only after confirming the disease pattern.";
-  }
-
-  if (/\b(weather|rain|temperature|humidity|storm|heat)\b/.test(q)) {
-    return "Quick weather fallback: plan spraying only in dry windows, avoid fertilizer before heavy rain, and protect sensitive crops during high heat or storms.";
-  }
-
-  if (/\b(price|market|mandi|sell|buy|rate)\b/.test(q)) {
-    return "Quick market fallback: compare nearby mandi modal prices and transport cost before selling; hold inventory briefly if trend is improving.";
-  }
-
-  if (/\b(loan|scheme|finance|subsidy|credit|insurance)\b/.test(q)) {
-    return "Quick finance fallback: shortlist schemes by eligibility, compare interest and repayment terms, and apply with Aadhaar, bank, and land documents ready.";
-  }
-
-  return "Assistant fallback: share crop, weather, market, or finance details and I will provide practical next steps.";
-}
-
-function fallbackResponse(message: string): ChatProxyResponse {
-  const reply = localReplyFor(message);
-
-  return {
-    reply,
-    final_message: reply,
-    intent: "general_query",
-    weather: {},
-    crops: {},
-    market: {},
-    finance: {},
-    agentResults: [],
-    timestamp: new Date().toISOString(),
-    error: "Live backend unavailable",
-  };
-}
-
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as ChatProxyPayload;
   const query = typeof body.query === "string" ? body.query : typeof body.message === "string" ? body.message : "";
 
   const bases = backendCandidates();
   if (!bases.length) {
-    return NextResponse.json(fallbackResponse(query), { status: 200 });
+    return NextResponse.json({ error: "Live AI unavailable" }, { status: 503 });
   }
 
   for (const base of bases) {
@@ -122,5 +83,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(fallbackResponse(query), { status: 200 });
+  return NextResponse.json({ error: "Live AI unavailable" }, { status: 503 });
 }

@@ -55,22 +55,9 @@ chatRouter.post("/chat", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Chat route error", error);
 
-    const fallbackResponse: OrchestratedChatResponse = {
-      weather: {},
-      crops: {},
-      market: {},
-      finance: {},
-      final_message:
-        "I'm having trouble processing your request right now. Please try again in a moment.",
-      reply:
-        "I'm having trouble processing your request right now. Please try again in a moment.",
-      intent: "general_query",
-      agentResults: [],
-      timestamp: new Date().toISOString(),
-      error: "Unable to process chat request",
-    };
-
-    return res.status(200).json(fallbackResponse);
+    return res.status(503).json({
+      error: error instanceof Error ? error.message : "Live AI unavailable",
+    });
   }
 });
 

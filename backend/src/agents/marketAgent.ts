@@ -275,11 +275,16 @@ function parseLlmJson(raw: string): LlmMarketResponse | null {
 async function generateMarketRecommendation(
   input: MarketInput,
   marketData: MarketRecord[],
+  options: { strict?: boolean } = {},
 ): Promise<{ best_market: string; recommendation: string; signal: "SELL" | "HOLD" }> {
   const apiKey = process.env.GROQ_API_KEY;
   const topMarket = marketData[0];
 
   if (!apiKey) {
+    if (options.strict) {
+      throw new Error("Live market AI unavailable");
+    }
+
     return {
       best_market: topMarket.mandi,
       recommendation: `Best net profit is currently at ${topMarket.mandi}. Prefer immediate sale if your lot moisture is below local mandi threshold.`,
@@ -341,6 +346,10 @@ async function generateMarketRecommendation(
       signal: parsed.signal === "HOLD" ? "HOLD" : "SELL",
     };
   } catch (error) {
+    if (options.strict) {
+      throw error instanceof Error ? error : new Error("Live market AI unavailable");
+    }
+
     console.error("generateMarketRecommendation fallback", error);
     return {
       best_market: topMarket.mandi,
@@ -352,17 +361,24 @@ async function generateMarketRecommendation(
   }
 }
 
-export async function getMarketData(input: MarketInput): Promise<MarketDashboardInsight> {
+export async function getMarketData(
+  input: MarketInput,
+  options: { strict?: boolean } = {},
+): Promise<MarketDashboardInsight> {
   let markets: MarketRecord[];
 
   try {
     markets = await fetchAgmarknetData(input);
   } catch (error) {
+    if (options.strict) {
+      throw error instanceof Error ? error : new Error("Live market data unavailable");
+    }
+
     console.error("AGMARKNET unavailable, using dynamic computed market insights", error);
     markets = dynamicFallbackMarkets(input).sort((a, b) => b.netProfit - a.netProfit).slice(0, 3);
   }
 
-  const llm = await generateMarketRecommendation(input, markets);
+  const llm = await generateMarketRecommendation(input, markets, options);
 
   return {
     markets,
@@ -377,13 +393,16 @@ export async function getMarketData(input: MarketInput): Promise<MarketDashboard
   };
 }
 
-export async function marketAgent(context: AgentContext): Promise<AgentResult> {
+export async function marketAgent(
+  context: AgentContext,
+  options: { strict?: boolean } = {},
+): Promise<AgentResult> {
   const marketData = await getMarketData({
     crop: parseCropFromQuery(context.message),
     location: context.locale ?? "Nagpur, Maharashtra",
     latitude: context.latitude,
     longitude: context.longitude,
-  });
+  }, options);
 
   return {
     agent: "market",

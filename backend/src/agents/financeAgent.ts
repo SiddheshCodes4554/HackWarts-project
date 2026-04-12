@@ -285,6 +285,7 @@ function buildPrompt(
 export async function getFinancialAdvice(
   userProfile: FinancialUserProfile,
   language = "English",
+  options: { strict?: boolean } = {},
 ): Promise<FinancialAdviceResult> {
   const selectedLanguage = normalizeLanguage(language);
   const eligible = await getEligibleSchemes(userProfile);
@@ -310,6 +311,10 @@ export async function getFinancialAdvice(
       api_live: eligible.api_live,
     };
   } catch (error) {
+    if (options.strict) {
+      throw error instanceof Error ? error : new Error("Live finance AI unavailable");
+    }
+
     if (!financeFallbackWarned) {
       const message = error instanceof Error ? error.message : "finance model unavailable";
       console.warn(`Using fallback financial advice (${message})`);
@@ -328,9 +333,12 @@ export async function getFinancialAdvice(
   }
 }
 
-export async function financeAgent(context: AgentContext): Promise<AgentResult> {
+export async function financeAgent(
+  context: AgentContext,
+  options: { strict?: boolean } = {},
+): Promise<AgentResult> {
   const userProfile = buildUserProfile(context);
-  const financialAdvice = await getFinancialAdvice(userProfile, context.language ?? "English");
+  const financialAdvice = await getFinancialAdvice(userProfile, context.language ?? "English", options);
   const topSchemes = financialAdvice.schemes.slice(0, 3);
   const schemeNames = topSchemes.map((scheme) => scheme.name).join(", ");
 

@@ -112,7 +112,7 @@ export async function handleQuery(
 
   if (effectiveIntent === "crop_advice") {
     const [weatherData, soilData] = await Promise.all([
-      weatherAgent(context),
+      weatherAgent(context, { strict: true }),
       getSoilProfile(
         Number.isFinite(location?.latitude) ? (location?.latitude as number) : 18.5204,
         Number.isFinite(location?.longitude) ? (location?.longitude as number) : 73.8567,
@@ -138,7 +138,7 @@ export async function handleQuery(
       disease: location?.disease ?? undefined,
       language: location?.language ?? "English",
       query: cleanQuery,
-    });
+    }, { strict: true });
 
     cropResult = {
       agent: "crop",
@@ -156,11 +156,11 @@ export async function handleQuery(
       },
     };
   } else if (effectiveIntent === "market_price") {
-    marketResult = await marketAgent(context);
+    marketResult = await marketAgent(context, { strict: true });
   } else if (effectiveIntent === "financial_help") {
-    financeResult = await financeAgent(context);
+    financeResult = await financeAgent(context, { strict: true });
   } else if (effectiveIntent === "weather") {
-    weatherResult = await weatherAgent(context);
+    weatherResult = await weatherAgent(context, { strict: true });
   }
 
   const weather = toStructuredAgentOutput(weatherResult);
@@ -170,7 +170,7 @@ export async function handleQuery(
   const finance = toStructuredAgentOutput(financeResult);
 
   if (effectiveIntent === "general_query") {
-    const general = await generateResponse(cleanQuery);
+    const general = await generateResponse(cleanQuery, { strict: true });
     finalMessage = general.message;
   } else if (effectiveIntent === "crop_advice") {
     finalMessage = resolvedCropAdvice?.summary ?? "Crop advice is unavailable right now.";
@@ -189,6 +189,7 @@ export async function handleQuery(
         "- simple language",
         "- actionable steps",
       ].join("\n"),
+      { strict: true },
     );
 
     finalMessage = combined.message;

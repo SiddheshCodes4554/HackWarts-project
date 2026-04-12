@@ -33,6 +33,10 @@ export type StructuredGroqResponse = {
   message: string;
 };
 
+type GroqResponseMode = {
+  strict?: boolean;
+};
+
 type GroqApiResponse = {
   choices?: Array<{
     message?: {
@@ -415,7 +419,10 @@ export async function requestGroqJson<T>(request: GroqJsonRequest, fallback: T):
   }
 }
 
-export async function generateResponse(prompt: string): Promise<StructuredGroqResponse> {
+export async function generateResponse(
+  prompt: string,
+  mode: GroqResponseMode = {},
+): Promise<StructuredGroqResponse> {
   const cleanedPrompt = prompt.trim();
 
   if (!cleanedPrompt) {
@@ -427,6 +434,10 @@ export async function generateResponse(prompt: string): Promise<StructuredGroqRe
 
   const apiKey = pickGroqApiKey();
   if (!apiKey) {
+    if (mode.strict) {
+      throw new Error("Live AI unavailable");
+    }
+
     return localFallbackResponse(cleanedPrompt, "configuration_required");
   }
 
@@ -437,6 +448,10 @@ export async function generateResponse(prompt: string): Promise<StructuredGroqRe
       const isLastAttempt = attempt === MAX_RETRIES;
       if (isLastAttempt) {
         console.error("Groq request failed", error);
+        if (mode.strict) {
+          throw error instanceof Error ? error : new Error("Live AI unavailable");
+        }
+
         return localFallbackResponse(cleanedPrompt, "service_unavailable");
       }
     }

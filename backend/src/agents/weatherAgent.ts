@@ -41,6 +41,7 @@ function buildAdvice(temperature: number, rainfall: number, humidity: number): s
 export async function getWeatherAdvisory(
   latitude: number,
   longitude: number,
+  options: { strict?: boolean } = {},
 ): Promise<WeatherAdvisory> {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), WEATHER_TIMEOUT_MS);
@@ -85,6 +86,10 @@ export async function getWeatherAdvisory(
       advice: buildAdvice(temperature, rainfall, humidity),
     };
   } catch (error) {
+    if (options.strict) {
+      throw error instanceof Error ? error : new Error("Live weather data unavailable");
+    }
+
     const message = error instanceof Error ? error.message : "weather service unavailable";
     console.warn(`Using fallback weather advisory (${message})`);
 
@@ -104,10 +109,13 @@ export async function getWeatherAdvisory(
   }
 }
 
-export async function weatherAgent(context: AgentContext): Promise<AgentResult> {
+export async function weatherAgent(
+  context: AgentContext,
+  options: { strict?: boolean } = {},
+): Promise<AgentResult> {
   const latitude = Number.isFinite(context.latitude) ? (context.latitude as number) : 18.5204;
   const longitude = Number.isFinite(context.longitude) ? (context.longitude as number) : 73.8567;
-  const advisory = await getWeatherAdvisory(latitude, longitude);
+  const advisory = await getWeatherAdvisory(latitude, longitude, options);
 
   return {
     agent: "weather",
