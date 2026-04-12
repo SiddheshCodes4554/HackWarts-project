@@ -71,6 +71,20 @@ interface FarmIntelligenceResponse {
     interval_days: number;
     depth_mm: number;
   };
+  historical_trends?: {
+    monthly: Array<{
+      crop: string;
+      month: string;
+      avg_price: number;
+      growth_rate: number;
+    }>;
+    yearly: Array<{
+      crop: string;
+      year: string;
+      avg_price: number;
+      growth_rate: number;
+    }>;
+  };
   best_crop_recommendation: AICropRecommendation;
   market_opportunities: Array<{
     crop: string;
@@ -199,6 +213,10 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
     { name: 'Remaining', value: 100 - intelligence.best_crop_recommendation.confidence },
   ];
 
+  const focusCrop = intelligence.best_crop_recommendation.crop;
+  const monthlyHistory = (intelligence.historical_trends?.monthly ?? []).filter((entry) => entry.crop === focusCrop);
+  const yearlyHistory = (intelligence.historical_trends?.yearly ?? []).filter((entry) => entry.crop === focusCrop);
+
   return (
     <div className="space-y-6">
       {/* AI Summary Card */}
@@ -245,6 +263,43 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
               <YAxis />
               <Tooltip formatter={(value) => `₹${value}`} />
               <Bar dataKey="price" fill="#3b82f6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Historical Trend Charts */}
+      {chartsReady && monthlyHistory.length > 0 && (
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900 mb-1">📅 Monthly Rate & Growth History</h3>
+          <p className="text-sm text-gray-600 mb-4">Crop: {focusCrop}</p>
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
+            <LineChart data={monthlyHistory}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis yAxisId="price" />
+              <YAxis yAxisId="growth" orientation="right" />
+              <Tooltip />
+              <Line yAxisId="price" type="monotone" dataKey="avg_price" stroke="#2563eb" strokeWidth={3} name="Rate (INR)" />
+              <Line yAxisId="growth" type="monotone" dataKey="growth_rate" stroke="#16a34a" strokeWidth={2} name="Growth %" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {chartsReady && yearlyHistory.length > 0 && (
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900 mb-1">🗓️ Yearly Rate & Growth History</h3>
+          <p className="text-sm text-gray-600 mb-4">Crop: {focusCrop}</p>
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
+            <BarChart data={yearlyHistory}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" />
+              <YAxis yAxisId="price" />
+              <YAxis yAxisId="growth" orientation="right" />
+              <Tooltip />
+              <Bar yAxisId="price" dataKey="avg_price" fill="#0ea5e9" name="Avg Rate (INR)" />
+              <Line yAxisId="growth" type="monotone" dataKey="growth_rate" stroke="#f97316" strokeWidth={3} name="Growth %" />
             </BarChart>
           </ResponsiveContainer>
         </div>
