@@ -68,6 +68,11 @@ export default function RegisterPage() {
       const result = await loginOrSignup(email, password, accountRole);
 
       if (!result.ok) {
+        if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
+          const waitMs = result.retryAfterSeconds * 1000;
+          setCooldownUntil(Date.now() + waitMs);
+          setCooldownSeconds(result.retryAfterSeconds);
+        }
         setError(result.message);
         return;
       }

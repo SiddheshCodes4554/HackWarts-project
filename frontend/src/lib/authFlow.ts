@@ -13,9 +13,14 @@ type AuthFlowSuccess = {
 type AuthFlowFailure = {
   ok: false;
   message: string;
+  retryAfterSeconds?: number;
 };
 
 export type AuthFlowResult = AuthFlowSuccess | AuthFlowFailure;
+
+type LoginOrSignupOptions = {
+  allowSignup?: boolean;
+};
 
 function normalizeMessage(error: unknown): string {
   if (!error) {
@@ -77,6 +82,33 @@ function isDuplicateUserError(error: AuthError | null): boolean {
   );
 }
 
+function parseRetryAfterSeconds(error: AuthError | null): number {
+  if (!error) {
+    return 60;
+  }
+
+  const rawMessage =
+    typeof error.message === 'string'
+      ? error.message
+      : '';
+  const match = rawMessage.match(/(\d+)\s*(s|sec|secs|second|seconds|m|min|minute|minutes)/i);
+  if (!match) {
+    return 60;
+  }
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) {
+    return 60;
+  }
+
+  const unit = match[2].toLowerCase();
+  if (unit.startsWith('m')) {
+    return Math.min(600, value * 60);
+  }
+
+  return Math.min(600, value);
+}
+
 function friendlyErrorMessage(params: {
   signInError: AuthError | null;
   signUpError: AuthError | null;
@@ -106,7 +138,9 @@ export async function loginOrSignup(
   email: string,
   password: string,
   role?: 'farmer' | 'buyer',
+  options: LoginOrSignupOptions = {},
 ): Promise<AuthFlowResult> {
+  const allowSignup = options.allowSignup ?? true;
   const normalizedEmail = email.trim().toLowerCase();
 
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -127,6 +161,16 @@ export async function loginOrSignup(
     return {
       ok: false,
       message: 'Too many attempts, try again later.',
+      retryAfterSeconds: parseRetryAfterSeconds(signInError),
+    };
+  }
+
+  if (!allowSignup) {
+    return {
+      ok: false,
+      message: isInvalidCredentialsError(signInError)
+        ? 'Incorrect password.'
+        : 'Unable to authenticate right now. Please try again.',
     };
   }
 
@@ -157,5 +201,8 @@ export async function loginOrSignup(
   return {
     ok: false,
     message: friendlyErrorMessage({ signInError, signUpError }),
+    retryAfterSeconds: isRateLimitError(signUpError)
+      ? parseRetryAfterSeconds(signUpError)
+      : undefined,
   };
 }

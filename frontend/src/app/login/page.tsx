@@ -89,9 +89,14 @@ export default function LoginPage() {
     setCooldownSeconds(2);
 
     try {
-      const result = await loginOrSignup(email, password, accountRole);
+      const result = await loginOrSignup(email, password, accountRole, { allowSignup: false });
 
       if (!result.ok) {
+        if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
+          const waitMs = result.retryAfterSeconds * 1000;
+          setCooldownUntil(Date.now() + waitMs);
+          setCooldownSeconds(result.retryAfterSeconds);
+        }
         setError(result.message);
         return;
       }
