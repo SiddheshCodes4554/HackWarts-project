@@ -54,6 +54,23 @@ interface FarmIntelligenceResponse {
   top_crops: CropTrendData[];
   soil_analysis: SoilAnalysis;
   weather_impact: WeatherImpact;
+  nasa_climate_analysis?: {
+    daily_avg_temp: number;
+    monthly_rainfall: number;
+    avg_humidity: number;
+    solar_energy: number;
+    wind_data: number;
+    moisture_trend: string;
+    frost_risk: number;
+    drought_risk: number;
+    flood_risk: number;
+    recommendations: string[];
+  };
+  irrigation_advice?: {
+    schedule: string;
+    interval_days: number;
+    depth_mm: number;
+  };
   best_crop_recommendation: AICropRecommendation;
   market_opportunities: Array<{
     crop: string;
@@ -396,6 +413,90 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
           </div>
         )}
       </div>
+
+      {/* NASA Climate Analysis */}
+      {intelligence.nasa_climate_analysis && (
+        <div className="bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            🛰️ Detailed Climate Analysis (NASA POWER)
+          </h3>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs text-gray-600 font-medium">Daily Avg Temp</p>
+              <p className="text-xl font-bold text-cyan-600 mt-1">{intelligence.nasa_climate_analysis.daily_avg_temp}°C</p>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs text-gray-600 font-medium">Monthly Rainfall</p>
+              <p className="text-xl font-bold text-blue-600 mt-1">{intelligence.nasa_climate_analysis.monthly_rainfall}mm</p>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs text-gray-600 font-medium">Avg Humidity</p>
+              <p className="text-xl font-bold text-green-600 mt-1">{intelligence.nasa_climate_analysis.avg_humidity}%</p>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs text-gray-600 font-medium">Solar Radiation</p>
+              <p className="text-xl font-bold text-yellow-600 mt-1">{intelligence.nasa_climate_analysis.solar_energy}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="bg-white rounded-lg p-3 border-l-4 border-blue-400">
+              <p className="text-xs text-gray-600 font-medium">Drought Risk</p>
+              <p className="text-2xl font-bold text-orange-600 mt-1">{intelligence.nasa_climate_analysis.drought_risk}%</p>
+            </div>
+            <div className="bg-white rounded-lg p-3 border-l-4 border-indigo-400">
+              <p className="text-xs text-gray-600 font-medium">Frost Risk</p>
+              <p className="text-2xl font-bold text-indigo-600 mt-1">{intelligence.nasa_climate_analysis.frost_risk}%</p>
+            </div>
+            <div className="bg-white rounded-lg p-3 border-l-4 border-blue-500">
+              <p className="text-xs text-gray-600 font-medium">Flood Risk</p>
+              <p className="text-2xl font-bold text-blue-700 mt-1">{intelligence.nasa_climate_analysis.flood_risk}%</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-3 mb-3">
+            <p className="text-sm font-medium text-gray-900 mb-2">Moisture Trend: <span className="text-cyan-600">{intelligence.nasa_climate_analysis.moisture_trend.toUpperCase()}</span></p>
+            <p className="text-sm text-gray-600">Wind: {intelligence.nasa_climate_analysis.wind_data} m/s</p>
+          </div>
+
+          {intelligence.nasa_climate_analysis.recommendations.length > 0 && (
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-sm font-medium text-gray-900 mb-2">NASA Recommendations:</p>
+              <ul className="space-y-1">
+                {intelligence.nasa_climate_analysis.recommendations.slice(0, 3).map((rec, idx) => (
+                  <li key={idx} className="text-sm text-gray-600">✓ {rec}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Irrigation Advice */}
+      {intelligence.irrigation_advice && (
+        <div className="bg-gradient-to-br from-teal-50 to-green-50 border border-teal-200 rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            💧 Irrigation Schedule (NASA-Based)
+          </h3>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="bg-white rounded-lg p-4">
+              <p className="text-gray-700 text-sm font-medium">Recommended Frequency</p>
+              <p className="text-2xl font-bold text-teal-600 mt-2">{intelligence.irrigation_advice.schedule}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-xs text-gray-600 font-medium">Interval Days</p>
+                <p className="text-xl font-bold text-green-600 mt-1">{intelligence.irrigation_advice.interval_days} days</p>
+              </div>
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-xs text-gray-600 font-medium">Water Depth</p>
+                <p className="text-xl font-bold text-blue-600 mt-1">{intelligence.irrigation_advice.depth_mm}mm</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-4">💡 Tip: Adjust irrigation based on recent rainfall and soil moisture checks.</p>
+        </div>
+      )}
     </div>
   );
 }

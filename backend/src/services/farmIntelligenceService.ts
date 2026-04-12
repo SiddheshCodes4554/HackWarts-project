@@ -1,6 +1,7 @@
 import { getMarketIntelligence } from './marketIntelligence';
 import { getSoilProfile } from './soilService';
 import { generateResponse } from './groqService';
+import { analyzeNASAData, getNASAIrrigationAdvice, NASAAnalysis } from './nasaDataService';
 import { DashboardLocation, SoilProfile, AgentContext } from '../utils/types';
 
 const INTELLIGENCE_TIMEOUT_MS = 20_000;
@@ -62,6 +63,23 @@ export interface FarmIntelligence {
   top_crops: CropTrendData[];
   soil_analysis: SoilAnalysis;
   weather_impact: WeatherImpact;
+  nasa_climate_analysis?: {
+    daily_avg_temp: number;
+    monthly_rainfall: number;
+    avg_humidity: number;
+    solar_energy: number;
+    wind_data: number;
+    moisture_trend: string;
+    frost_risk: number;
+    drought_risk: number;
+    flood_risk: number;
+    recommendations: string[];
+  };
+  irrigation_advice?: {
+    schedule: string;
+    interval_days: number;
+    depth_mm: number;
+  };
   best_crop_recommendation: AICropRecommendation;
   market_opportunities: Array<{
     crop: string;
@@ -338,7 +356,8 @@ function generateInsights(
   topCrops: CropTrendData[],
   soilAnalysis: SoilAnalysis,
   recommendation: AICropRecommendation,
-  weatherImpact: WeatherImpact
+  weatherImpact: WeatherImpact,
+  nasaAnalysis?: NASAAnalysis | null
 ): FarmInsight[] {
   const insights: FarmInsight[] = [];
 
@@ -397,6 +416,45 @@ function generateInsights(
     priority: 'medium',
   });
 
+  // NASA Climate Based Insights
+  if (nasaAnalysis) {
+    if (nasaAnalysis.drought_risk > 50) {
+      insights.push({
+        title: '💧 Drought Warning',
+        description: `Drought risk is ${nasaAnalysis.drought_risk}%. ${nasaAnalysis.recommendations.find(r => r.includes('drought')) || 'Implement water conservation strategies.'}`,
+        icon: 'water_drop',
+        priority: 'high',
+      });
+    }
+
+    if (nasaAnalysis.frost_risk > 30) {
+      insights.push({
+        title: '❄️ Frost Alert',
+        description: `Frost risk detected (${nasaAnalysis.frost_risk}%). Protect sensitive crops in early mornings.`,
+        icon: 'snowflake',
+        priority: 'high',
+      });
+    }
+
+    if (nasaAnalysis.monthly_rainfall < 50) {
+      insights.push({
+        title: '🌵 Low Rainfall',
+        description: `Monthly rainfall is ${nasaAnalysis.monthly_rainfall}mm. Plan supplementary irrigation.`,
+        icon: 'cloud_off',
+        priority: 'high',
+      });
+    }
+
+    if (nasaAnalysis.solar_energy > 18) {
+      insights.push({
+        title: '☀️ High Solar Radiation',
+        description: `Strong solar radiation (${nasaAnalysis.solar_energy}). Ensure adequate water and mulch application.`,
+        icon: 'sun',
+        priority: 'medium',
+      });
+    }
+  }
+
   return insights;
 }
 
@@ -408,11 +466,13 @@ export async function generateFarmInsights(location: DashboardLocation, userProf
     const startTime = Date.now();
     const district = extractDistrict(location.placeName);
 
-    // Fetch data in parallel where possible
-    const [topCrops, soilAnalysis, weatherImpact] = await Promise.all([
+    // Fetch data in parallel where possible (including NASA data)
+    const [topCrops, soilAnalysis, weatherImpact, nasaAnalysis, irrigationAdvice] = await Promise.all([
       getTopCropsInRegion(district),
       analyzeSoil(location),
-      Promise.resolve(generateWeatherImpact([]))
+      Promise.resolve(generateWeatherImpact([])),
+      analyzeNASAData(location.latitude, location.longitude),
+      getNASAIrrigationAdvice(location.latitude, location.longitude),
     ]);
 
     // Get AI recommendation
@@ -433,11 +493,18 @@ export async function generateFarmInsights(location: DashboardLocation, userProf
       topCrops,
       soilAnalysis,
       recommendation,
-      actualWeatherImpact
+      actualWeatherImpact,
+      nasaAnalysis
     );
 
-    // Generate summary
-    const summary = `Based on soil analysis (${soilAnalysis.soil_score}/100) and market trends in ${district}, growing ${recommendation.crop} can increase profit by ${recommendation.profit_potential}% this season. ${soilAnalysis.recommendations[0] || 'Monitor soil health regularly.'}`;
+    // Generate summary with NASA data
+    const summaryAddition = nasaAnalysis && nasaAnalysis.frost_risk > 30 
+      ? ' Protect cropos from frost risk.' 
+      : nasaAnalysis && nasaAnalysis.drought_risk > 50 
+      ? ' Plan irrigation carefully due to drought risk.'
+      : '';
+
+    const summary = `Based on soil analysis (${soilAnalysis.soil_score}/100) and market trends in ${district}, growing ${recommendation.crop} can increase profit by ${recommendation.profit_potential}% this season. ${soilAnalysis.recommendations[0] || 'Monitor soil health regularly.'}${summaryAddition}`;
 
     const intelligence: FarmIntelligence = {
       timestamp: new Date().toISOString(),
@@ -449,6 +516,8 @@ export async function generateFarmInsights(location: DashboardLocation, userProf
       top_crops: topCrops,
       soil_analysis: soilAnalysis,
       weather_impact: actualWeatherImpact,
+      nasa_climate_analysis: nasaAnalysis || undefined,
+      irrigation_advice: irrigationAdvice,
       best_crop_recommendation: recommendation,
       market_opportunities: topCrops
         .filter(c => c.trend === 'rising')
