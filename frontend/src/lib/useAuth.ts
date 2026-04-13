@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from './supabaseClient';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session } from './supabaseClient';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);

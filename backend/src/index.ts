@@ -2,11 +2,14 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
+import { connectDb } from "./config/db";
 import { analyzeCropRouter } from "./routes/analyzeCrop";
+import { authRouter } from "./routes/auth";
 import { chatRouter } from "./routes/chat";
 import { communityRouter } from "./routes/community";
 import { dashboardRouter } from "./routes/dashboard";
 import { financeRouter } from "./routes/finance";
+import { mongoRouter } from "./routes/mongo";
 import { marketRouter } from "./routes/market";
 import { userLocationRouter } from "./routes/userLocation";
 import { weatherRouter } from "./routes/weather";
@@ -33,22 +36,20 @@ const geminiKey =
   process.env.GOOGLE_API_KEY?.trim() ||
   process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
   "";
-const SUPABASE_URL = getOptionalEnv("SUPABASE_URL");
-const SUPABASE_ANON_KEY = getOptionalEnv("SUPABASE_ANON_KEY");
+const MONGO_URI = getOptionalEnv("MONGO_URI");
 
 if (groqKeys.length === 0 && !geminiKey) {
   console.warn("No Groq or Gemini API key configured; assistant will run with local fallbacks.");
 }
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn("SUPABASE_URL or SUPABASE_ANON_KEY is missing; continuing startup with limited features.");
+if (!MONGO_URI) {
+  console.warn("MONGO_URI is missing; backend will be unable to connect to MongoDB.");
 }
 
 // Prevent lint/TS unused complaints while still running startup diagnostics.
 void groqKeys;
 void geminiKey;
-void SUPABASE_URL;
-void SUPABASE_ANON_KEY;
+void MONGO_URI;
 
 const port = Number.parseInt(process.env.PORT ?? "", 10);
 if (!Number.isFinite(port) || port <= 0) {
@@ -95,6 +96,8 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).send("OK");
 });
 
+app.use(authRouter);
+app.use(mongoRouter);
 app.use(chatRouter);
 app.use(communityRouter);
 app.use(dashboardRouter);
@@ -134,6 +137,14 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`FarmEase backend is running on port ${port}`);
+async function bootstrap() {
+  await connectDb();
+  app.listen(port, () => {
+    console.log(`FarmEase backend is running on port ${port}`);
+  });
+}
+
+void bootstrap().catch((error) => {
+  console.error("Failed to bootstrap backend", error);
+  process.exit(1);
 });

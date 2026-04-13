@@ -45,7 +45,7 @@ export async function saveChatMessage(
       return null;
     }
 
-    return data;
+    return data as ChatMessage | null;
   } catch (err) {
     console.error('Error saving chat:', err);
     return null;
@@ -69,7 +69,7 @@ export async function fetchChatHistory(userId: string, limit: number = 50): Prom
       return [];
     }
 
-    return data || [];
+    return (data as ChatMessage[] | null) || [];
   } catch (err) {
     console.error('Error fetching chat history:', err);
     return [];
@@ -136,7 +136,7 @@ export async function getChatStats(userId: string) {
     }
 
     const byType: Record<string, number> = {};
-    (data || []).forEach((item: { agent_type: string | null }) => {
+    (data as Array<{ agent_type: string | null }> | null || []).forEach((item) => {
       const type = item.agent_type || 'general';
       byType[type] = (byType[type] || 0) + 1;
     });

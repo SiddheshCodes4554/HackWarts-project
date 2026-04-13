@@ -1,5 +1,4 @@
-import { AuthError, Session, User } from '@supabase/supabase-js';
-import { supabase } from './supabaseClient';
+import { AuthError, Session, User, supabase } from './supabaseClient';
 
 type AuthFlowMode = 'login' | 'signup';
 

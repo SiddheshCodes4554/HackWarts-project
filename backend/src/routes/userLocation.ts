@@ -1,4 +1,5 @@
 import { Request, Response, Router } from "express";
+import { User } from "../models/User";
 
 const userLocationRouter = Router();
 
@@ -48,32 +49,20 @@ function checkRateLimit(key: string): boolean {
 }
 
 async function patchProfile(userId: string, payload: Record<string, unknown>): Promise<void> {
-  const supabaseUrl = process.env.SUPABASE_URL?.trim();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Location save service is not configured");
-  }
-
-  const endpoint = `${supabaseUrl.replace(/\/+$/, "")}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`;
-
-  const response = await fetch(endpoint, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      Prefer: "return=representation",
+  const update = {
+    name: typeof payload.name === "string" ? payload.name : undefined,
+    land_area: typeof payload.land_area === "number" ? payload.land_area : undefined,
+    primary_crop: typeof payload.primary_crop === "string" ? payload.primary_crop : undefined,
+    location: {
+      lat: typeof payload.latitude === "number" ? payload.latitude : typeof payload.lat === "number" ? payload.lat : undefined,
+      lon: typeof payload.longitude === "number" ? payload.longitude : typeof payload.lon === "number" ? payload.lon : undefined,
+      district: typeof payload.district === "string" ? payload.district : undefined,
+      state: typeof payload.state === "string" ? payload.state : undefined,
     },
-    body: JSON.stringify(payload),
-  });
+    updatedAt: new Date(),
+  };
 
-  if (response.ok) {
-    return;
-  }
-
-  const raw = await response.text();
-  throw new Error(raw || `Supabase update failed: HTTP ${response.status}`);
+  await User.updateOne({ email: userId }, { $set: update }, { upsert: true });
 }
 
 userLocationRouter.post("/user/location", async (req: Request, res: Response) => {
