@@ -35,7 +35,7 @@ export function HeroCard({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className={`rounded-3xl border border-emerald-200/70 bg-gradient-to-br ${accent} p-5 shadow-[0_20px_60px_rgba(22,163,74,0.08)] sm:p-7`}
+      className={`rounded-3xl border border-emerald-200/70 bg-linear-to-br ${accent} p-5 shadow-[0_20px_60px_rgba(22,163,74,0.08)] sm:p-7`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>

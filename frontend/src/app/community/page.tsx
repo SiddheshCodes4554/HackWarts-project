@@ -466,7 +466,7 @@ export default function CommunityPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#f5f8ee] via-[#ecf5df] to-[#f5f8ee] px-3 py-4 sm:px-5">
+    <main className="min-h-screen bg-linear-to-b from-[#f5f8ee] via-[#ecf5df] to-[#f5f8ee] px-3 py-4 sm:px-5">
       <section className="mx-auto w-full max-w-3xl space-y-4">
         <header className="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-lime-100">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-lime-700">Farmer Community</p>

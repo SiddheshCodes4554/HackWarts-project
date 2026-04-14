@@ -209,7 +209,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
       if (updateError) throw updateError;
 
-      setProfile((prev) =>
+      const createdAt = profile?.created_at ?? new Date().toISOString();
+
+      setProfile((prev: UserProfile | null) =>
         prev ? { ...prev, ...updateData } : ({
           id: user.id,
           name: typeof data.name === 'string' ? data.name : '',
@@ -222,7 +224,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           role: data.role,
           user_type: data.user_type,
           account_type: data.account_type,
-          created_at: prev?.created_at ?? new Date().toISOString(),
+          created_at: createdAt,
           updated_at: updateData.updated_at,
         } as UserProfile)
       );

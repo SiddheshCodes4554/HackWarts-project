@@ -158,7 +158,7 @@ export function LocationSearch({ onSelect, placeholder = "Search village, distri
       </div>
 
       {open ? (
-        <div className="absolute z-[70] mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute z-70 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           {suggestions.map((suggestion) => (
             <button
               key={`${suggestion.lat}-${suggestion.lon}-${suggestion.label}`}

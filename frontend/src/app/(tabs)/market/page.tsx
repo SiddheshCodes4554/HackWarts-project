@@ -216,7 +216,7 @@ export default function MarketPage() {
           </section>
         ) : null}
 
-        <section className="space-y-4 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+        <section className="space-y-4 rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
           <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
             <Search className="h-4 w-4 text-lime-700" />
             Smart Commodity Search
@@ -269,7 +269,7 @@ export default function MarketPage() {
           ) : null}
         </section>
 
-        <section className="rounded-[2rem] border border-emerald-100 bg-white/95 p-6 shadow-sm sm:p-8">
+        <section className="rounded-4xl border border-emerald-100 bg-white/95 p-6 shadow-sm sm:p-8">
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
             <Flame className="h-4 w-4" />
             Trending Now

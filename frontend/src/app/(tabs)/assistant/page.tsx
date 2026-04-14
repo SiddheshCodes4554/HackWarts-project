@@ -342,7 +342,7 @@ export default function AssistantPage() {
                           return (
                             <article
                               key={card.key}
-                              className={`rounded-[1.5rem] border p-4 shadow-sm ${card.accent}`}
+                              className={`rounded-3xl border p-4 shadow-sm ${card.accent}`}
                             >
                               <div className="flex items-center gap-2">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
@@ -374,7 +374,7 @@ export default function AssistantPage() {
                     </div>
                   ) : (
                     <div
-                      className={`max-w-[85%] rounded-[2rem] px-4 py-3 text-sm leading-6 shadow-sm ${
+                      className={`max-w-[85%] rounded-4xl px-4 py-3 text-sm leading-6 shadow-sm ${
                         message.role === "user"
                           ? "bg-lime-700 text-white"
                           : "border border-lime-100 bg-white text-slate-800"
@@ -400,12 +400,12 @@ export default function AssistantPage() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about crops, weather, markets, or finance..."
                 disabled={loading}
-                className="flex-1 rounded-[2rem] border border-lime-200 bg-lime-50 px-5 py-3 text-sm outline-none transition focus:border-lime-500 focus:ring-2 focus:ring-lime-200 disabled:opacity-50"
+                className="flex-1 rounded-4xl border border-lime-200 bg-lime-50 px-5 py-3 text-sm outline-none transition focus:border-lime-500 focus:ring-2 focus:ring-lime-200 disabled:opacity-50"
               />
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
-                className="inline-flex items-center gap-2 rounded-[2rem] bg-lime-700 px-4 py-3 text-white font-semibold hover:bg-lime-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-4xl bg-lime-700 px-4 py-3 text-white font-semibold hover:bg-lime-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <SendHorizonal className="h-4 w-4" />
                 <span className="hidden sm:inline">Send</span>
@@ -416,7 +416,7 @@ export default function AssistantPage() {
 
         {/* Chat History Sidebar */}
         {showHistory && (
-          <section className="hidden sm:flex w-80 flex-col rounded-[2rem] border border-lime-100 bg-white/95 shadow-sm overflow-hidden">
+          <section className="hidden sm:flex w-80 flex-col rounded-4xl border border-lime-100 bg-white/95 shadow-sm overflow-hidden">
             <div className="border-b border-lime-100 bg-white px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-700">
               📋 Chat History ({history.length})
             </div>
@@ -434,7 +434,7 @@ export default function AssistantPage() {
                       className="rounded-xl border border-lime-100 bg-lime-50 p-3 hover:bg-lime-100 transition-colors cursor-pointer group"
                       title={msg.query}
                     >
-                      <p className="text-xs font-semibold text-lime-700 uppercase tracking-[0.1em] mb-1">
+                      <p className="text-xs font-semibold text-lime-700 uppercase tracking-widest mb-1">
                         {msg.agent_type}
                       </p>
                       <p className="text-sm text-slate-700 line-clamp-2">{msg.query}</p>

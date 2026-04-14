@@ -173,7 +173,7 @@ export default function CommodityDetailsPage() {
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
               <TrendingUp className="h-4 w-4 text-emerald-600" /> 7-Day Price Trend
             </div>
-            <div className="h-72 min-h-[18rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+            <div className="h-72 min-h-72 min-w-0 rounded-2xl bg-slate-50 p-3">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <LineChart data={data?.priceTrend ?? []}>
@@ -192,7 +192,7 @@ export default function CommodityDetailsPage() {
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
               <Store className="h-4 w-4 text-sky-700" /> Top 3 Mandis
             </div>
-            <div className="h-72 min-h-[18rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+            <div className="h-72 min-h-72 min-w-0 rounded-2xl bg-slate-50 p-3">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <BarChart data={data?.topMandis ?? []}>

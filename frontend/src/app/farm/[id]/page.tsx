@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Edit3, Loader2, MapPin, Sprout } from "lucide-react";
-import FarmMap from "../../../components/FarmMap";
 import { useUser } from "@/context/UserContext";
 import { calculateFarmDraft, type FarmRecord } from "../../../lib/farm";
 import { useFarm } from "../../../lib/useFarm";
+
+const FarmMap = dynamic(() => import("../../../components/FarmMap"), { ssr: false });
 
 function InsightCard({ title, items }: { title: string; items: string[] }) {
   return (

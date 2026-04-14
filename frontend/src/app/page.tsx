@@ -30,7 +30,7 @@ const proofPoints = [
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.14),_transparent_35%),linear-gradient(180deg,#f8fff6_0%,#eff8f0_45%,#f7fbf8_100%)] text-slate-900">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.14),transparent_35%),linear-gradient(180deg,#f8fff6_0%,#eff8f0_45%,#f7fbf8_100%)] text-slate-900">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between rounded-3xl border border-white/70 bg-white/70 px-4 py-3 backdrop-blur-md shadow-sm sm:px-6">
           <div>
@@ -94,9 +94,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.05 }}
-            className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-[0_30px_80px_rgba(22,163,74,0.08)] backdrop-blur-xl sm:p-6"
+            className="rounded-4xl border border-white/70 bg-white/85 p-5 shadow-[0_30px_80px_rgba(22,163,74,0.08)] backdrop-blur-xl sm:p-6"
           >
-            <div className="rounded-[1.5rem] bg-emerald-50 p-4">
+            <div className="rounded-3xl bg-emerald-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Today&apos;s focus</p>
               <h2 className="mt-2 text-2xl font-semibold text-slate-900">What should I do today?</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">

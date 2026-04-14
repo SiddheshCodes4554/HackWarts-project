@@ -61,7 +61,7 @@ export default function SelectLocationPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef9e3_0%,_#f8fcf5_40%,_#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#eef9e3_0%,#f8fcf5_40%,#f1f6ec_100%)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl space-y-5">
         <div className="flex items-center justify-between rounded-3xl border border-lime-200/80 bg-white p-5 shadow-sm">
           <div>

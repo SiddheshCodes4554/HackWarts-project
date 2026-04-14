@@ -201,7 +201,7 @@ export default function FinancePage() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <form onSubmit={handleSubmit} className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+          <form onSubmit={handleSubmit} className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
             <h2 className="text-xl font-semibold text-slate-900">Personalize the advice</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Use these answers to filter the schemes that fit your farm better.
@@ -269,7 +269,7 @@ export default function FinancePage() {
           </form>
 
           <div className="space-y-5">
-            <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+            <section className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.22em] text-lime-700">Top schemes</p>
@@ -287,7 +287,7 @@ export default function FinancePage() {
 
               <div className="mt-5 space-y-4">
                 {topSchemes.map((scheme) => (
-                  <article key={scheme.name} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
+                  <article key={scheme.name} className="rounded-3xl border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -335,14 +335,14 @@ export default function FinancePage() {
                 ))}
 
                 {!loading && topSchemes.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-dashed border-lime-200 bg-lime-50/60 p-5 text-sm text-slate-600">
+                  <div className="rounded-3xl border border-dashed border-lime-200 bg-lime-50/60 p-5 text-sm text-slate-600">
                     No schemes matched this profile yet.
                   </div>
                 ) : null}
               </div>
             </section>
 
-            <section className="rounded-[2rem] border border-sky-100 bg-white/95 p-6 shadow-sm sm:p-8">
+            <section className="rounded-4xl border border-sky-100 bg-white/95 p-6 shadow-sm sm:p-8">
               <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
                 <CheckCircle2 className="h-4 w-4 text-sky-600" />
                 Farmer-friendly guidance
@@ -351,7 +351,7 @@ export default function FinancePage() {
                 {advice?.advice ?? "Refresh the advice to see the best schemes for your current profile."}
               </p>
               {advice?.steps?.length ? (
-                <div className="mt-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
+                <div className="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Next steps</p>
                   <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
                     {advice.steps.map((step, index) => (
@@ -366,7 +366,7 @@ export default function FinancePage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+        <section className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Quick note</p>

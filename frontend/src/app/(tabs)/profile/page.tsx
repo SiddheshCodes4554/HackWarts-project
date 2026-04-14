@@ -164,21 +164,21 @@ export default function ProfilePage() {
         </section>
 
         {error && (
-          <div className="rounded-[1.5rem] border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="rounded-[1.5rem] border border-green-200 bg-green-50 px-6 py-4 text-sm text-green-700 flex items-start gap-3">
-            <Check className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="rounded-3xl border border-green-200 bg-green-50 px-6 py-4 text-sm text-green-700 flex items-start gap-3">
+            <Check className="w-5 h-5 shrink-0 mt-0.5" />
             <span>Profile updated successfully!</span>
           </div>
         )}
 
         {/* Account Info Section */}
-        <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+        <section className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
           <h2 className="text-lg font-semibold text-slate-900">Account Information</h2>
           <div className="mt-6 space-y-4">
             <div className="rounded-2xl bg-slate-50 px-4 py-3">
@@ -196,7 +196,7 @@ export default function ProfilePage() {
 
         {/* Personal Information Section */}
         {!isEditing ? (
-          <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+          <section className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
             <h2 className="text-lg font-semibold text-slate-900">Personal Information</h2>
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-2xl bg-slate-50 px-4 py-3">
@@ -240,7 +240,7 @@ export default function ProfilePage() {
             </div>
           </section>
         ) : (
-          <form onSubmit={handleSubmit} className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8 space-y-6">
+          <form onSubmit={handleSubmit} className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8 space-y-6">
             <h2 className="text-lg font-semibold text-slate-900">Edit Profile</h2>
 
             <div>
@@ -378,7 +378,7 @@ export default function ProfilePage() {
         )}
 
         {/* Settings Section */}
-        <section className="rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+        <section className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
           <div className="flex items-center gap-2 text-lg font-semibold text-slate-900">
             <Settings2 className="h-5 w-5 text-lime-700" />
             Preferences
@@ -400,7 +400,7 @@ export default function ProfilePage() {
         </section>
 
         {/* Notifications Section */}
-        <section className="rounded-[2rem] border border-lime-100 bg-lime-50/80 p-6 shadow-sm sm:p-8">
+        <section className="rounded-4xl border border-lime-100 bg-lime-50/80 p-6 shadow-sm sm:p-8">
           <div className="flex items-center gap-2 font-semibold text-slate-900">
             <Bell className="h-5 w-5 text-lime-700" />
             Notification Summary
@@ -411,7 +411,7 @@ export default function ProfilePage() {
         </section>
 
         {/* Logout Section */}
-        <section className="rounded-[2rem] border border-red-200 bg-red-50/80 p-6 shadow-sm sm:p-8">
+        <section className="rounded-4xl border border-red-200 bg-red-50/80 p-6 shadow-sm sm:p-8">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-slate-900 flex items-center gap-2">

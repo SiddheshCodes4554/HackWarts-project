@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, MapPinned, Save, ShieldCheck, Sprout } from "lucide-react";
-import FarmMap from "../../components/FarmMap";
 import { useLocation } from "../../context/LocationContext";
 import { useUser } from "@/context/UserContext";
 import { calculateFarmDraft, saveFarmRecord, type FarmDraft } from "../../lib/farm";
 import { useFarm } from "../../lib/useFarm";
+
+const FarmMap = dynamic(() => import("../../components/FarmMap"), { ssr: false });
 
 function formatAreaValue(acres: number): string {
   if (!Number.isFinite(acres) || acres <= 0) {

@@ -157,7 +157,7 @@ export default function MapSelector({ onDone, onLocationConfirmed }: MapSelector
         }}
       />
 
-      <div className="h-[320px] overflow-hidden rounded-2xl border border-slate-200">
+      <div className="h-80 overflow-hidden rounded-2xl border border-slate-200">
         <MapContainer
           center={markerPosition}
           zoom={DEFAULT_ZOOM}

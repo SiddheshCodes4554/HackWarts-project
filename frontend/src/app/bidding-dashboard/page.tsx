@@ -356,7 +356,7 @@ export default function BiddingDashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#eef7ff] to-[#f8fbff] px-3 py-4 sm:px-5">
+    <main className="min-h-screen bg-linear-to-b from-[#eef7ff] to-[#f8fbff] px-3 py-4 sm:px-5">
       <section className="mx-auto w-full max-w-5xl space-y-4">
         <header className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Buyer Bidding Dashboard</p>

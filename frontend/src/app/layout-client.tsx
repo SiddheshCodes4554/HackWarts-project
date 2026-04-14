@@ -181,7 +181,7 @@ export default function RootLayoutClient({
     <>
       {user && (
         <div className="min-h-screen bg-[#edf6ea] text-slate-900">
-          <div className="mx-auto flex min-h-screen max-w-[1480px]">
+          <div className="mx-auto flex min-h-screen max-w-370">
             <aside className="hidden w-64 border-r border-emerald-100 bg-[#f7fbf5] p-4 lg:flex lg:flex-col">
               <Link href={isBuyer ? '/bidding-dashboard' : '/home'} className="mb-5 flex items-center gap-2 px-2">
                 <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">

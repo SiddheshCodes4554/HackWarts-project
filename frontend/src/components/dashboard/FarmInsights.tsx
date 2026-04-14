@@ -150,7 +150,7 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
       <div className="space-y-4">
         <div className="bg-white rounded-lg p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full animate-pulse" />
+            <div className="w-12 h-12 bg-linear-to-br from-green-400 to-blue-500 rounded-full animate-pulse" />
             <div>
               <div className="h-4 bg-gray-200 rounded w-48 animate-pulse" />
               <div className="h-3 bg-gray-100 rounded w-64 mt-2 animate-pulse" />
@@ -220,7 +220,7 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
   return (
     <div className="space-y-6">
       {/* AI Summary Card */}
-      <div className="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-6 shadow-sm">
+      <div className="bg-linear-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-6 shadow-sm">
         <div className="flex items-start gap-4">
           <div className="text-3xl">🧠</div>
           <div className="flex-1">
@@ -311,13 +311,13 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
           🌱 Soil Health Analysis
         </h3>
         <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
+          <div className="bg-linear-to-br from-green-50 to-green-100 rounded-lg p-4">
             <p className="text-gray-700 text-sm font-medium">Soil Score</p>
             <p className={`text-3xl font-bold mt-2 ${getSoilScoreColor(intelligence.soil_analysis.soil_score)}`}>
               {intelligence.soil_analysis.soil_score}/100
             </p>
           </div>
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
+          <div className="bg-linear-to-br from-blue-50 to-blue-100 rounded-lg p-4">
             <p className="text-gray-700 text-sm font-medium">pH Level</p>
             <p className="text-2xl font-bold text-blue-600 mt-2">{intelligence.soil_analysis.ph}</p>
             <p className="text-xs text-gray-600">{intelligence.soil_analysis.acidity}</p>
@@ -359,7 +359,7 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
       </div>
 
       {/* AI Recommendation Card */}
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+      <div className="bg-linear-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-6 shadow-sm">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           🎯 AI Recommendation
         </h3>
@@ -471,7 +471,7 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
 
       {/* NASA Climate Analysis */}
       {intelligence.nasa_climate_analysis && (
-        <div className="bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg p-6 shadow-sm">
+        <div className="bg-linear-to-br from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             🛰️ Detailed Climate Analysis (NASA POWER)
           </h3>
@@ -529,7 +529,7 @@ export default function FarmInsights({ latitude, longitude, placeName }: FarmIns
 
       {/* Irrigation Advice */}
       {intelligence.irrigation_advice && (
-        <div className="bg-gradient-to-br from-teal-50 to-green-50 border border-teal-200 rounded-lg p-6 shadow-sm">
+        <div className="bg-linear-to-br from-teal-50 to-green-50 border border-teal-200 rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             💧 Irrigation Schedule (NASA-Based)
           </h3>
