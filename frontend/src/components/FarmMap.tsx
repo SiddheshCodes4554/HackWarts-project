@@ -103,22 +103,24 @@ function DrawControl({
       }
     };
 
-    const handleCreated = (event: L.DrawEvents.Created) => {
+    const handleCreated: L.LeafletEventHandlerFn = (event) => {
+      const createdEvent = event as L.DrawEvents.Created;
       const featureGroup = featureGroupRef.current;
       if (!featureGroup) {
         return;
       }
 
       featureGroup.clearLayers();
-      featureGroup.addLayer(event.layer);
-      extractBoundary(event.layer);
+      featureGroup.addLayer(createdEvent.layer);
+      extractBoundary(createdEvent.layer);
     };
 
-    const handleEdited = (event: L.DrawEvents.Edited) => {
-      event.layers.eachLayer((layer) => extractBoundary(layer));
+    const handleEdited: L.LeafletEventHandlerFn = (event) => {
+      const editedEvent = event as L.DrawEvents.Edited;
+      editedEvent.layers.eachLayer((layer) => extractBoundary(layer));
     };
 
-    const handleDeleted = () => {
+    const handleDeleted: L.LeafletEventHandlerFn = () => {
       onBoundaryChange(EMPTY_BOUNDARY);
     };
 
