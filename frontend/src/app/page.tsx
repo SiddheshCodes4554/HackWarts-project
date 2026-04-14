@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Leaf, Sparkles, Target, Workflow } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useUser } from '@/context/UserContext';
 
 const features = [
   {
@@ -29,6 +32,47 @@ const proofPoints = [
 ];
 
 export default function LandingPage() {
+  const router = useRouter();
+  const { user, profile, profileStatus, loading } = useUser();
+  const roleSource =
+    (typeof profile?.role === 'string' && profile.role) ||
+    (typeof profile?.user_type === 'string' && profile.user_type) ||
+    (typeof profile?.account_type === 'string' && profile.account_type) ||
+    (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
+    'farmer';
+  const isBuyer = String(roleSource).toLowerCase() === 'buyer';
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!user) {
+      return;
+    }
+
+    if (profileStatus === 'missing') {
+      router.replace('/onboarding');
+      return;
+    }
+
+    if (profileStatus === 'ready' && profile) {
+      router.replace(isBuyer ? '/bidding-dashboard' : '/home');
+    }
+  }, [isBuyer, loading, profile, profileStatus, router, user]);
+
+  if (loading || user) {
+    return (
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.14),transparent_35%),linear-gradient(180deg,#f8fff6_0%,#eff8f0_45%,#f7fbf8_100%)] text-slate-900">
+        <div className="flex min-h-screen items-center justify-center px-4">
+          <div className="rounded-3xl border border-white/70 bg-white/80 px-5 py-4 text-sm font-medium text-slate-700 shadow-sm backdrop-blur">
+            Loading your farm workspace...
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.14),transparent_35%),linear-gradient(180deg,#f8fff6_0%,#eff8f0_45%,#f7fbf8_100%)] text-slate-900">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">

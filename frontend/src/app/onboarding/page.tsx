@@ -112,8 +112,16 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (!name || !locationName || (!isBuyer && (!landArea || !primaryCrop))) {
+    const normalizedLandArea = Number(landArea);
+
+    if (!name.trim() || !locationName.trim() || (!isBuyer && (!landArea.trim() || !primaryCrop))) {
       setError('Please fill in all fields');
+      setLoading(false);
+      return;
+    }
+
+    if (!isBuyer && (!Number.isFinite(normalizedLandArea) || normalizedLandArea < 0)) {
+      setError('Please enter a valid land area.');
       setLoading(false);
       return;
     }
@@ -161,9 +169,12 @@ export default function OnboardingPage() {
           location_name: resolvedLocationName,
           latitude: resolvedLatitude,
           longitude: resolvedLongitude,
-          land_area: isBuyer ? 0 : parseFloat(landArea),
+          land_area: isBuyer ? 0 : normalizedLandArea,
           primary_crop: isBuyer ? 'Buyer' : primaryCrop,
           language,
+          role: isBuyer ? 'buyer' : 'farmer',
+          user_type: isBuyer ? 'buyer' : 'farmer',
+          account_type: isBuyer ? 'buyer' : 'farmer',
           updated_at: new Date().toISOString(),
         });
 
