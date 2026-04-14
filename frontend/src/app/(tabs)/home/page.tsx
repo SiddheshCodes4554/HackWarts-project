@@ -29,6 +29,7 @@ import {
   Leaf,
   Loader2,
   MapPin,
+  Sparkles,
   Sprout,
   TrendingDown,
   TrendingUp,
@@ -101,6 +102,19 @@ type DashboardPayload = {
   };
   insights: string[];
   warning?: string;
+};
+
+type DecisionItem = {
+  message: string;
+  type: "alert" | "recommendation" | "summary";
+  priority?: "high" | "medium" | "low";
+  createdAt: string;
+};
+
+type AIDecisionPayload = {
+  topAlerts: DecisionItem[];
+  recommendations: DecisionItem[];
+  summary: string;
 };
 
 const API_BASE_URL = (
@@ -318,6 +332,25 @@ const fetcher = async (url: string): Promise<DashboardPayload> => {
   return normalized;
 };
 
+const decisionFetcher = async (url: string): Promise<AIDecisionPayload> => {
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as Partial<AIDecisionPayload>;
+
+  if (!response.ok) {
+    return {
+      topAlerts: [],
+      recommendations: [],
+      summary: "AI Farm Brief not available yet.",
+    };
+  }
+
+  return {
+    topAlerts: Array.isArray(payload.topAlerts) ? payload.topAlerts as DecisionItem[] : [],
+    recommendations: Array.isArray(payload.recommendations) ? payload.recommendations as DecisionItem[] : [],
+    summary: typeof payload.summary === "string" ? payload.summary : "AI Farm Brief not available yet.",
+  };
+};
+
 const featureLinks = [
   {
     title: "Crop Help",
@@ -373,6 +406,7 @@ export default function HomePage() {
   const { user, profile, profileStatus, loading: userLoading } = useUser();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [chartsReady, setChartsReady] = useState(false);
+  const [runningAnalysis, setRunningAnalysis] = useState(false);
   const dashboardApiBase = useMemo(() => resolveDashboardBaseUrl(), []);
 
   const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
@@ -404,6 +438,38 @@ export default function HomePage() {
     revalidateOnFocus: false,
     keepPreviousData: true,
   });
+
+  const decisionKey = user?.id ? `/api/dashboard/ai-decisions?userId=${encodeURIComponent(user.id)}&limit=12` : null;
+  const {
+    data: aiDecisions,
+    isLoading: isDecisionLoading,
+    mutate: refreshDecisions,
+  } = useSWR<AIDecisionPayload>(decisionKey, decisionFetcher, {
+    refreshInterval: 60 * 60 * 1000,
+    revalidateOnFocus: false,
+  });
+
+  const handleRunAnalysis = async () => {
+    if (!user?.id || runningAnalysis) {
+      return;
+    }
+
+    setRunningAnalysis(true);
+    try {
+      await fetch("/api/dashboard/run-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          name: profile?.name,
+        }),
+      });
+
+      await refreshDecisions();
+    } finally {
+      setRunningAnalysis(false);
+    }
+  };
 
   useEffect(() => {
     if (!dashboardKey) {
@@ -480,6 +546,62 @@ export default function HomePage() {
             {data.warning}
           </div>
         ) : null}
+
+        <section className="rounded-3xl border border-emerald-200 bg-white/90 p-6 shadow-[0_20px_50px_rgba(16,185,129,0.08)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Autonomous Layer</p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-900">AI Decisions for You</h2>
+              <p className="mt-2 text-sm text-slate-600">Hourly autonomous analysis from weather, soil, and market agents.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRunAnalysis}
+              disabled={!user?.id || runningAnalysis}
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {runningAnalysis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Run AI Analysis
+            </button>
+          </div>
+
+          {isDecisionLoading ? (
+            <div className="mt-4 text-sm text-slate-600">Loading AI decisions...</div>
+          ) : (
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4">
+                <p className="text-sm font-semibold text-red-800">Top Alerts</p>
+                <div className="mt-3 space-y-2">
+                  {(aiDecisions?.topAlerts ?? []).slice(0, 3).map((item, index) => (
+                    <p key={`alert-${index}`} className="text-sm text-red-900">{item.message}</p>
+                  ))}
+                  {(aiDecisions?.topAlerts?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-red-900">No critical alerts right now.</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                <p className="text-sm font-semibold text-amber-800">Recommended Actions</p>
+                <div className="mt-3 space-y-2">
+                  {(aiDecisions?.recommendations ?? []).slice(0, 3).map((item, index) => (
+                    <p key={`rec-${index}`} className="text-sm text-amber-900">{item.message}</p>
+                  ))}
+                  {(aiDecisions?.recommendations?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-amber-900">No action recommendations yet.</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+                <p className="text-sm font-semibold text-sky-800">AI Farm Brief</p>
+                <p className="mt-3 whitespace-pre-line text-sm text-sky-900">
+                  {aiDecisions?.summary || "Today:\n- Waiting for first autonomous run\nFocus: monitor weather + soil updates"}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Smart Farm Intelligence Dashboard */}
         {!isLoading && Number.isFinite(effectiveLatitude) && Number.isFinite(effectiveLongitude) && (

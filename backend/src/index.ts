@@ -14,6 +14,7 @@ import { marketRouter } from "./routes/market";
 import { userLocationRouter } from "./routes/userLocation";
 import { weatherRouter } from "./routes/weather";
 import { getGroqApiKeys } from "./services/groqKeys";
+import { startAgentRunner } from "./jobs/agentRunner";
 
 dotenv.config({
   path: path.resolve(__dirname, "..", ".env"),
@@ -139,6 +140,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 async function bootstrap() {
   await connectDb();
+  startAgentRunner();
   app.listen(port, () => {
     console.log(`FarmEase backend is running on port ${port}`);
   });

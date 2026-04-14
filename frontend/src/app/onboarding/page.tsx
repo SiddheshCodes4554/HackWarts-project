@@ -10,6 +10,7 @@ import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const [forceOnboarding, setForceOnboarding] = useState(false);
   const { user, profile, profileStatus, loading: userLoading, refreshProfile } = useUser();
   const { setLocation } = useLocation();
   const [name, setName] = useState('');
@@ -31,6 +32,15 @@ export default function OnboardingPage() {
   const isBuyer = String(roleSource).toLowerCase() === 'buyer';
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setForceOnboarding(params.get('force') === '1');
+  }, []);
+
+  useEffect(() => {
     if (userLoading) {
       return;
     }
@@ -41,10 +51,10 @@ export default function OnboardingPage() {
     }
 
     // Logged-in users with completed profile should not return to onboarding.
-    if (profileStatus === 'ready' && profile) {
+    if (!forceOnboarding && profileStatus === 'ready' && profile) {
       router.replace(isBuyer ? '/bidding-dashboard' : '/home');
     }
-  }, [isBuyer, user, profile, profileStatus, userLoading, router]);
+  }, [forceOnboarding, isBuyer, user, profile, profileStatus, userLoading, router]);
 
   const requestGPSLocation = async () => {
     setGpsLoading(true);

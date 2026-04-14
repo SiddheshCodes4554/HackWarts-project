@@ -1,6 +1,8 @@
 import { Request, Response, Router } from "express";
 import { getDashboardData } from "../services/dashboardService";
 import { generateFarmInsights } from "../services/farmIntelligenceService";
+import { Alert } from "../models/Alert";
+import { runAgentWorkflow } from "../orchestrator/agentOrchestrator";
 
 const dashboardRouter = Router();
 
@@ -149,5 +151,49 @@ async function handleFarmIntelligenceRequest(req: Request, res: Response) {
 }
 
 dashboardRouter.get("/farm-intelligence", handleFarmIntelligenceRequest);
+
+dashboardRouter.get("/dashboard/ai-decisions", async (req: Request, res: Response) => {
+  try {
+    const userId = typeof req.query.userId === "string" ? req.query.userId.trim().toLowerCase() : "";
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 10));
+    const alerts = await Alert.find({ userId }).sort({ createdAt: -1 }).limit(limit).lean();
+
+    const topAlerts = alerts.filter((item) => item.type === "alert").slice(0, 5);
+    const recommendations = alerts.filter((item) => item.type === "recommendation").slice(0, 5);
+    const latestSummary = alerts.find((item) => item.type === "summary")?.message ?? "No AI brief yet.";
+
+    return res.status(200).json({
+      topAlerts,
+      recommendations,
+      summary: latestSummary,
+    });
+  } catch (error) {
+    console.error("ai-decisions route error", error);
+    return res.status(500).json({ error: "Unable to fetch AI decisions" });
+  }
+});
+
+dashboardRouter.post("/dashboard/run-analysis", async (req: Request, res: Response) => {
+  try {
+    const userId = typeof req.body?.userId === "string" ? req.body.userId.trim().toLowerCase() : "";
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    const output = await runAgentWorkflow({
+      email: userId,
+      name: typeof req.body?.name === "string" ? req.body.name : "",
+    });
+
+    return res.status(200).json({ success: true, ...output });
+  } catch (error) {
+    console.error("run-analysis route error", error);
+    return res.status(500).json({ error: "Unable to run AI analysis right now" });
+  }
+});
 
 export { dashboardRouter };

@@ -108,7 +108,7 @@ export default function RegisterPage() {
       }
 
       setSuccessMessage('Account verified successfully. Redirecting...');
-      router.push('/');
+      router.push('/onboarding?force=1');
     } catch {
       setError('Unable to authenticate right now. Please try again.');
     } finally {
