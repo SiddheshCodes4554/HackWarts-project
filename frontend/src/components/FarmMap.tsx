@@ -103,7 +103,7 @@ function DrawControl({
       }
     };
 
-    const handleCreated: L.LeafletEventHandlerFn = (event) => {
+    const handleCreated = (event: L.LeafletEvent) => {
       const createdEvent = event as L.DrawEvents.Created;
       const featureGroup = featureGroupRef.current;
       if (!featureGroup) {
@@ -115,12 +115,12 @@ function DrawControl({
       extractBoundary(createdEvent.layer);
     };
 
-    const handleEdited: L.LeafletEventHandlerFn = (event) => {
+    const handleEdited = (event: L.LeafletEvent) => {
       const editedEvent = event as L.DrawEvents.Edited;
       editedEvent.layers.eachLayer((layer) => extractBoundary(layer));
     };
 
-    const handleDeleted: L.LeafletEventHandlerFn = () => {
+    const handleDeleted = () => {
       onBoundaryChange(EMPTY_BOUNDARY);
     };
 
