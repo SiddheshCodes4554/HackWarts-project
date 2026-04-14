@@ -41,9 +41,10 @@ export default function LandingPage() {
     (typeof user?.user_metadata?.role === 'string' && user.user_metadata.role) ||
     'farmer';
   const isBuyer = String(roleSource).toLowerCase() === 'buyer';
+  const waitingForAuthBootstrap = loading || (Boolean(user) && profileStatus === 'loading');
 
   useEffect(() => {
-    if (loading) {
+    if (waitingForAuthBootstrap) {
       return;
     }
 
@@ -56,12 +57,10 @@ export default function LandingPage() {
       return;
     }
 
-    if (profileStatus === 'ready' && profile) {
-      router.replace(isBuyer ? '/bidding-dashboard' : '/home');
-    }
-  }, [isBuyer, loading, profile, profileStatus, router, user]);
+    router.replace(isBuyer ? '/bidding-dashboard' : '/home');
+  }, [isBuyer, profileStatus, router, user, waitingForAuthBootstrap]);
 
-  if (loading || user) {
+  if (waitingForAuthBootstrap || user) {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.14),transparent_35%),linear-gradient(180deg,#f8fff6_0%,#eff8f0_45%,#f7fbf8_100%)] text-slate-900">
         <div className="flex min-h-screen items-center justify-center px-4">

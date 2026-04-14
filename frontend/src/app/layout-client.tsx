@@ -20,7 +20,7 @@ import {
 import { useEffect, useState } from 'react';
 import { LocationUpdateToast } from '@/components/LocationUpdateToast';
 
-const BUYER_ALLOWED_ROUTES = new Set(['/bidding-dashboard', '/profile', '/(tabs)/profile']);
+const BUYER_ALLOWED_ROUTES = ['/bidding-dashboard', '/assistant', '/marketplace', '/profile'];
 const BUYER_NAV_ITEMS = [
   { href: '/bidding-dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/assistant', label: 'Assistant', icon: Bot },
@@ -130,8 +130,16 @@ export default function RootLayoutClient({
       return;
     }
 
-    // Buyers should only access bidding dashboard and profile screens.
-    if (user && profileStatus === 'ready' && profile && isBuyer && !isPublicAuthRoute && pathname !== '/' && !BUYER_ALLOWED_ROUTES.has(pathname)) {
+    // Buyers should only access routes that are part of the buyer navigation experience.
+    if (
+      user &&
+      profileStatus === 'ready' &&
+      profile &&
+      isBuyer &&
+      !isPublicAuthRoute &&
+      pathname !== '/' &&
+      !BUYER_ALLOWED_ROUTES.some((allowedRoute) => matchesPath(pathname, allowedRoute))
+    ) {
       router.replace('/bidding-dashboard');
     }
   }, [isBuyer, loading, pathname, profile, profileStatus, router, user]);
