@@ -109,6 +109,21 @@ export default function RootLayoutClient({
       return;
     }
 
+    // Anonymous users should be able to stay on the landing page.
+    if (!user && pathname === '/') {
+      return;
+    }
+
+    // Authenticated users landing on the home page should be routed into the app.
+    if (user && pathname === '/') {
+      if (profileStatus === 'missing') {
+        router.replace('/onboarding');
+      } else if (profileStatus === 'ready' && profile) {
+        router.replace(isBuyer ? '/bidding-dashboard' : '/home');
+      }
+      return;
+    }
+
     // Authenticated users without profile should complete onboarding first.
     if (user && profileStatus === 'missing' && !isOnboarding && !isLogin && !isRegister && pathname !== '/') {
       router.replace('/onboarding');

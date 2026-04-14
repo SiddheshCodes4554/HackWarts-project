@@ -5,8 +5,8 @@ import { UserProvider } from "../context/UserContext";
 import RootLayoutClient from "./layout-client";
 
 export const metadata: Metadata = {
-  title: "FarmEase 🌾 - Your AI Farming Assistant",
-  description: "FarmEase provides an AI assistant experience for practical farming support.",
+  title: "FarmEase - AI Farm Assistant",
+  description: "FarmEase turns weather, soil, and market signals into actionable farm decisions.",
 };
 
 export default function RootLayout({

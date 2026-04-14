@@ -2,12 +2,23 @@
 @import "leaflet/dist/leaflet.css";
 
 :root {
-  --background: #edf6ea;
+  color-scheme: light;
+  --background: #f5fbf5;
   --foreground: #0f172a;
-  --surface: #ffffff;
-  --surface-soft: #f7fbf5;
-  --border-soft: #d9e7d3;
-  --accent: #2f7a2f;
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-soft: #f8fdf8;
+  --border-soft: rgba(148, 163, 184, 0.16);
+  --accent: #16a34a;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #07130b;
+  --foreground: #e2f5e5;
+  --surface: rgba(10, 24, 14, 0.88);
+  --surface-soft: rgba(15, 28, 19, 0.9);
+  --border-soft: rgba(148, 163, 184, 0.15);
+  --accent: #4ade80;
 }
 
 @theme inline {
@@ -18,7 +29,9 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at top, rgba(34, 197, 94, 0.12), transparent 34%),
+    linear-gradient(180deg, #fbfffb 0%, var(--background) 35%, #f7fbf8 100%);
   color: var(--foreground);
   font-family: "Manrope", "Segoe UI", Arial, sans-serif;
   min-height: 100vh;
@@ -73,10 +86,17 @@ select:-webkit-autofill:focus {
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: 1.25rem;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
 }
 
 .app-surface-soft {
   background: var(--surface-soft);
   border: 1px solid var(--border-soft);
   border-radius: 1rem;
+}
+
+.app-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
 }
