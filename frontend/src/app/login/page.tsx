@@ -4,14 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import { loginOrSignup } from '@/lib/authFlow';
+import { sendEmailOtp, verifyEmailOtp } from '@/lib/authFlow';
 import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, profile, profileStatus, loading: userLoading } = useUser();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [accountRole, setAccountRole] = useState<'farmer' | 'buyer'>('farmer');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -75,6 +76,39 @@ export default function LoginPage() {
     }
   }, [isBuyer, user, profile, profileStatus, userLoading, router]);
 
+  const handleSendOtp = async () => {
+    const now = Date.now();
+    if (loading || now < cooldownUntil) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setLoading(true);
+
+    try {
+      const result = await sendEmailOtp(email);
+      if (!result.ok) {
+        if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
+          const waitMs = result.retryAfterSeconds * 1000;
+          setCooldownUntil(Date.now() + waitMs);
+          setCooldownSeconds(result.retryAfterSeconds);
+        }
+        setError(result.message);
+        return;
+      }
+
+      setOtpSent(true);
+      setSuccessMessage('OTP sent to your email.');
+      setCooldownUntil(Date.now() + 30000);
+      setCooldownSeconds(30);
+    } catch {
+      setError('Unable to send OTP right now.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const now = Date.now();
@@ -89,7 +123,11 @@ export default function LoginPage() {
     setCooldownSeconds(2);
 
     try {
-      const result = await loginOrSignup(email, password, accountRole, { allowSignup: false });
+      const result = await verifyEmailOtp({
+        email,
+        otp,
+        role: accountRole,
+      });
 
       if (!result.ok) {
         if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
@@ -111,7 +149,7 @@ export default function LoginPage() {
         return;
       }
 
-      setSuccessMessage(result.mode === 'signup' ? 'Account created successfully. Redirecting...' : 'Signed in successfully. Redirecting...');
+      setSuccessMessage('Signed in successfully. Redirecting...');
       router.replace('/');
     } catch (err) {
       setError('Unable to authenticate right now. Please try again.');
@@ -184,16 +222,27 @@ export default function LoginPage() {
             />
           </div>
 
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleSendOtp}
+              disabled={loading || cooldownSeconds > 0 || !email.trim()}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {cooldownSeconds > 0 ? `Resend in ${cooldownSeconds}s` : otpSent ? 'Resend OTP' : 'Send OTP'}
+            </button>
+          </div>
+
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
+            <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
+              OTP Code
             </label>
             <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              id="otp"
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit OTP"
               required
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
@@ -204,7 +253,7 @@ export default function LoginPage() {
             disabled={loading || cooldownSeconds > 0}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : cooldownSeconds > 0 ? `Please wait ${cooldownSeconds}s` : 'Continue'}
+            {loading ? 'Processing...' : 'Verify OTP & Continue'}
           </button>
         </form>
 

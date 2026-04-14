@@ -1,4 +1,4 @@
-import { AuthError, Session, User, supabase } from './supabaseClient';
+import { AuthError, Session, User, setMongoSession, supabase } from './supabaseClient';
 
 type AuthFlowMode = 'login' | 'signup';
 
@@ -17,9 +17,21 @@ type AuthFlowFailure = {
 
 export type AuthFlowResult = AuthFlowSuccess | AuthFlowFailure;
 
+type OtpSendResult = {
+  ok: boolean;
+  message: string;
+  retryAfterSeconds?: number;
+};
+
 type LoginOrSignupOptions = {
   allowSignup?: boolean;
 };
+
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  'http://localhost:5000'
+).replace(/\/$/, '');
 
 function normalizeMessage(error: unknown): string {
   if (!error) {
@@ -106,6 +118,94 @@ function parseRetryAfterSeconds(error: AuthError | null): number {
   }
 
   return Math.min(600, value);
+}
+
+export async function sendEmailOtp(email: string): Promise<OtpSendResult> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return { ok: false, message: 'Email is required.' };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = typeof payload?.error === 'string' ? payload.error : 'Unable to send OTP right now.';
+      const match = message.match(/(\d+)s/i);
+      return {
+        ok: false,
+        message,
+        retryAfterSeconds: match ? Number(match[1]) : undefined,
+      };
+    }
+
+    return {
+      ok: true,
+      message: 'OTP sent to your email.',
+    };
+  } catch {
+    return {
+      ok: false,
+      message: 'Unable to send OTP right now. Please try again.',
+    };
+  }
+}
+
+export async function verifyEmailOtp(params: {
+  email: string;
+  otp: string;
+  role: 'farmer' | 'buyer';
+  name?: string;
+}): Promise<AuthFlowResult> {
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const normalizedOtp = params.otp.trim();
+
+  if (!normalizedEmail || !normalizedOtp) {
+    return {
+      ok: false,
+      message: 'Email and OTP are required.',
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        otp: normalizedOtp,
+        role: params.role,
+        name: params.name,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.session || !payload?.user) {
+      return {
+        ok: false,
+        message: typeof payload?.error === 'string' ? payload.error : 'Invalid OTP.',
+      };
+    }
+
+    setMongoSession(payload.session as Session);
+
+    return {
+      ok: true,
+      mode: 'login',
+      user: payload.user as User,
+      session: payload.session as Session,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: 'Unable to verify OTP right now. Please try again.',
+    };
+  }
 }
 
 function friendlyErrorMessage(params: {

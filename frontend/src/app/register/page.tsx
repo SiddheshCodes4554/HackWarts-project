@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import { loginOrSignup } from '@/lib/authFlow';
+import { sendEmailOtp, verifyEmailOtp } from '@/lib/authFlow';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [name, setName] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [accountRole, setAccountRole] = useState<'farmer' | 'buyer'>('farmer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +37,7 @@ export default function RegisterPage() {
     };
   }, [cooldownUntil]);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOtp = async () => {
     setError(null);
     setSuccessMessage(null);
 
@@ -47,25 +47,9 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-    setCooldownUntil(now + 2000);
-    setCooldownSeconds(2);
-
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
-    // Validate password strength
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setLoading(false);
-      return;
-    }
 
     try {
-      const result = await loginOrSignup(email, password, accountRole);
+      const result = await sendEmailOtp(email);
 
       if (!result.ok) {
         if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
@@ -73,6 +57,42 @@ export default function RegisterPage() {
           setCooldownUntil(Date.now() + waitMs);
           setCooldownSeconds(result.retryAfterSeconds);
         }
+        setError(result.message);
+        return;
+      }
+
+      setOtpSent(true);
+      setCooldownUntil(Date.now() + 30000);
+      setCooldownSeconds(30);
+      setSuccessMessage('OTP sent to your email.');
+    } catch {
+      setError('Unable to send OTP right now. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (!otp.trim()) {
+      setError('Please enter OTP.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await verifyEmailOtp({
+        email,
+        otp,
+        role: accountRole,
+        name,
+      });
+
+      if (!result.ok) {
         setError(result.message);
         return;
       }
@@ -87,9 +107,9 @@ export default function RegisterPage() {
         return;
       }
 
-      setSuccessMessage(result.mode === 'signup' ? 'Account created successfully. Redirecting...' : 'Signed in successfully. Redirecting...');
+      setSuccessMessage('Account verified successfully. Redirecting...');
       router.push('/');
-    } catch (err) {
+    } catch {
       setError('Unable to authenticate right now. Please try again.');
     } finally {
       setLoading(false);
@@ -146,6 +166,20 @@ export default function RegisterPage() {
           </div>
 
           <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+              Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
             </label>
@@ -160,31 +194,27 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleSendOtp}
+              disabled={loading || cooldownSeconds > 0 || !email.trim()}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {cooldownSeconds > 0 ? `Resend in ${cooldownSeconds}s` : otpSent ? 'Resend OTP' : 'Send OTP'}
+            </button>
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-              Confirm Password
+            <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
+              OTP Code
             </label>
             <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter password"
+              id="otp"
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit OTP"
               required
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
@@ -195,7 +225,7 @@ export default function RegisterPage() {
             disabled={loading || cooldownSeconds > 0}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : cooldownSeconds > 0 ? `Please wait ${cooldownSeconds}s` : 'Continue'}
+            {loading ? 'Processing...' : 'Verify OTP & Continue'}
           </button>
         </form>
 

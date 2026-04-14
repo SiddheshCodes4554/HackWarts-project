@@ -304,6 +304,10 @@ function emitAuthChange(session: Session | null) {
   writeSession(session);
 }
 
+export function setMongoSession(session: Session | null): void {
+  emitAuthChange(session);
+}
+
 export function isSupabaseConfigured(): boolean {
   return true;
 }
