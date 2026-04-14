@@ -7,7 +7,7 @@ import { sendOtpEmail } from "../services/emailService";
 
 const authRouter = Router();
 const OTP_TTL_MS = 5 * 60 * 1000;
-const RESEND_COOLDOWN_MS = 30 * 1000;
+const OTP_COOLDOWN_MS = 30 * 1000;
 
 function normalizeEmail(email: unknown): string {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -100,8 +100,8 @@ authRouter.post("/auth/send-otp", async (req: Request, res: Response) => {
     }
 
     const existing = await Otp.findOne({ email });
-    if (existing?.lastSentAt && Date.now() - existing.lastSentAt.getTime() < RESEND_COOLDOWN_MS) {
-      const retryInSeconds = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - existing.lastSentAt.getTime())) / 1000);
+    if (existing?.lastSentAt && Date.now() - existing.lastSentAt.getTime() < OTP_COOLDOWN_MS) {
+      const retryInSeconds = Math.ceil((OTP_COOLDOWN_MS - (Date.now() - existing.lastSentAt.getTime())) / 1000);
       return res.status(429).json({ success: false, error: `Please wait ${retryInSeconds}s before requesting a new OTP.` });
     }
 

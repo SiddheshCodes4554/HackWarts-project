@@ -1,28 +1,45 @@
-import { Resend } from "resend";
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
-function getResendClient(): Resend {
-  const resendApiKey = process.env.RESEND_API_KEY?.trim() ?? "";
-  if (!resendApiKey) {
-    throw new Error("RESEND_API_KEY is not configured");
+function getBrevoConfig() {
+  const apiKey = process.env.BREVO_API_KEY?.trim() ?? "";
+  const senderEmail = process.env.BREVO_SENDER_EMAIL?.trim() ?? "";
+  const senderName = process.env.BREVO_SENDER_NAME?.trim() || "FarmEase";
+
+  if (!apiKey) {
+    throw new Error("BREVO_API_KEY is not configured");
   }
 
-  return new Resend(resendApiKey);
+  if (!senderEmail) {
+    throw new Error("BREVO_SENDER_EMAIL is not configured");
+  }
+
+  return { apiKey, senderEmail, senderName };
 }
 
 export async function sendOtpEmail(email: string, otp: string): Promise<void> {
-  const resend = getResendClient();
-  const fromEmail = process.env.RESEND_FROM_EMAIL?.trim() || "onboarding@resend.dev";
+  const { apiKey, senderEmail, senderName } = getBrevoConfig();
 
-  const response = await resend.emails.send({
-    from: fromEmail,
-    to: email,
-    subject: "Your FarmEase OTP Code",
-    text: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
-    html: `<p>Your OTP is: <strong>${otp}</strong></p><p>It will expire in 5 minutes.</p>`,
+  const response = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "api-key": apiKey,
+    },
+    body: JSON.stringify({
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: [{ email }],
+      subject: "Your FarmEase OTP Code",
+      textContent: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
+      htmlContent: `<p>Your OTP is: <strong>${otp}</strong></p><p>It will expire in 5 minutes.</p>`,
+    }),
   });
 
-  if (response.error) {
-    const details = typeof response.error.message === "string" ? response.error.message : "unknown provider error";
-    throw new Error(`Resend delivery rejected: ${details}`);
+  if (!response.ok) {
+    const errorPayload = await response.text();
+    throw new Error(`Brevo delivery rejected (${response.status}): ${errorPayload}`);
   }
 }
