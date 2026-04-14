@@ -1,17 +1,22 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import { useMemo, useState, useEffect } from 'react';
 import { useUser } from '@/context/UserContext';
 import { useLocation } from '@/context/LocationContext';
-import { useEffect, useState } from 'react';
 import { Loader, MapPin, AlertCircle, Check, Bell, Settings2, LogOut, BadgeInfo } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { emitLocationUpdatedToast } from '@/lib/locationEvents';
+import { useFarm } from '@/lib/useFarm';
+
+const FarmMap = dynamic(() => import('@/components/FarmMap'), { ssr: false });
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user, profile, loading: userLoading, updateProfile } = useUser();
   const { setLocation } = useLocation();
+  const { farm, loading: farmLoading } = useFarm(user?.id);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +32,24 @@ export default function ProfilePage() {
     primary_crop: '',
     language: 'English',
   });
+
+  const mapCenter = useMemo<[number, number]>(() => {
+    if (farm?.center) {
+      return [farm.center.lat, farm.center.lon];
+    }
+
+    if (profile?.latitude && profile?.longitude) {
+      return [profile.latitude, profile.longitude];
+    }
+
+    if (formData.latitude !== 0 && formData.longitude !== 0) {
+      return [formData.latitude, formData.longitude];
+    }
+
+    return [21.1458, 79.0882];
+  }, [farm?.center, formData.latitude, formData.longitude, profile?.latitude, profile?.longitude]);
+
+  const normalizedLandArea = Number.isFinite(formData.land_area) && formData.land_area >= 0 ? formData.land_area : 0;
 
   useEffect(() => {
     if (!userLoading && !user) {
@@ -102,7 +125,7 @@ export default function ProfilePage() {
         location_name: formData.location_name,
         latitude: formData.latitude,
         longitude: formData.longitude,
-        land_area: formData.land_area,
+        land_area: normalizedLandArea,
         primary_crop: formData.primary_crop,
         language: formData.language,
       });
@@ -189,6 +212,57 @@ export default function ProfilePage() {
               <p className="text-xs font-semibold uppercase text-slate-500">Account Created</p>
               <p className="mt-2 font-medium text-slate-900">
                 {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Not available'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Farm location</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                View the saved farm boundary and keep the map location aligned with your profile.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/farm')}
+              className="inline-flex items-center justify-center rounded-2xl border border-lime-200 bg-lime-50 px-4 py-2 text-sm font-semibold text-lime-800 transition hover:bg-lime-100"
+            >
+              Open farm editor
+            </button>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-3xl border border-slate-100 bg-slate-50">
+            <div className="h-[320px] sm:h-[380px]">
+              {farmLoading ? (
+                <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                  Loading farm map...
+                </div>
+              ) : (
+                <FarmMap
+                  initialBoundary={farm?.boundary}
+                  initialCenter={mapCenter}
+                  editable={false}
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase text-slate-500">Saved farm</p>
+              <p className="mt-2 text-sm font-medium text-slate-900">{farm ? farm.name : 'No farm saved'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase text-slate-500">Boundary points</p>
+              <p className="mt-2 text-sm font-medium text-slate-900">{farm?.boundary?.length ?? 0}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase text-slate-500">Center</p>
+              <p className="mt-2 text-sm font-medium text-slate-900">
+                {mapCenter[0].toFixed(4)}, {mapCenter[1].toFixed(4)}
               </p>
             </div>
           </div>
@@ -297,8 +371,14 @@ export default function ProfilePage() {
                 type="number"
                 step="0.1"
                 min="0"
-                value={formData.land_area}
-                onChange={(e) => setFormData({ ...formData, land_area: parseFloat(e.target.value) })}
+                value={Number.isFinite(formData.land_area) && formData.land_area > 0 ? formData.land_area : ''}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  setFormData({
+                    ...formData,
+                    land_area: nextValue === '' ? 0 : Number(nextValue),
+                  });
+                }}
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
               />
             </div>
