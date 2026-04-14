@@ -165,6 +165,7 @@ export default function OnboardingPage() {
         .from('profiles')
         .upsert({
           id: user.id,
+          email: user.email,
           name,
           location_name: resolvedLocationName,
           latitude: resolvedLatitude,

@@ -91,24 +91,46 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       setProfileStatus('loading');
-      const profileResult = await withTimeout(
+      const profileByEmailResult = await withTimeout(
         supabase
           .from('profiles')
           .select('*')
-          .eq('id', userId)
+          .eq('email', userId)
           .single(),
         AUTH_BOOTSTRAP_TIMEOUT_MS,
       );
 
-      if (profileResult === TIMEOUT_SENTINEL) {
+      if (profileByEmailResult === TIMEOUT_SENTINEL) {
         setProfileStatus('unknown');
         return;
       }
 
-      const typedProfileResult = profileResult as {
+      let typedProfileResult = profileByEmailResult as {
         data: UserProfile | null;
         error: { code?: string; message?: string } | null;
       };
+
+      // Backward compatibility for records that were stored with `id` but no `email` field.
+      if (typedProfileResult.error?.code === 'PGRST116') {
+        const profileByIdResult = await withTimeout(
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single(),
+          AUTH_BOOTSTRAP_TIMEOUT_MS,
+        );
+
+        if (profileByIdResult === TIMEOUT_SENTINEL) {
+          setProfileStatus('unknown');
+          return;
+        }
+
+        typedProfileResult = profileByIdResult as {
+          data: UserProfile | null;
+          error: { code?: string; message?: string } | null;
+        };
+      }
 
       const { data, error: fetchError } = typedProfileResult;
 
@@ -197,8 +219,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setError(null);
+      const roleSource =
+        (typeof data.role === 'string' && data.role) ||
+        (typeof profile?.role === 'string' && profile.role) ||
+        (typeof profile?.user_type === 'string' && profile.user_type) ||
+        (typeof profile?.account_type === 'string' && profile.account_type) ||
+        (typeof user.user_metadata?.role === 'string' && user.user_metadata.role) ||
+        'farmer';
+      const normalizedRole: 'farmer' | 'buyer' = String(roleSource).toLowerCase() === 'buyer' ? 'buyer' : 'farmer';
+
       const updateData = {
         id: user.id,
+        email: user.email,
+        role: normalizedRole,
+        user_type: normalizedRole,
+        account_type: normalizedRole,
         ...data,
         updated_at: new Date().toISOString(),
       };

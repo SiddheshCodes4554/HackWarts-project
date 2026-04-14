@@ -256,6 +256,14 @@ function deriveUpsertFilters(collection: string, values: unknown): QueryFilter[]
 
   const record = values as Record<string, unknown>;
   const filters: QueryFilter[] = [];
+  const hasEmail = typeof record.email === 'string' && record.email;
+
+  // Profiles are backed by the `users` collection where email is the stable unique key.
+  // Prefer matching by email to avoid duplicate inserts when `id` is not stored.
+  if ((collection === 'profiles' || collection === 'users') && hasEmail) {
+    filters.push({ field: 'email', operator: 'eq', value: record.email });
+    return filters;
+  }
 
   if (typeof record.id === 'string' && record.id) {
     filters.push({ field: 'id', operator: 'eq', value: record.id });
@@ -280,7 +288,7 @@ function deriveUpsertFilters(collection: string, values: unknown): QueryFilter[]
   }
 
   if (collection === 'profiles' || collection === 'users') {
-    if (typeof record.email === 'string' && record.email) {
+    if (hasEmail) {
       filters.push({ field: 'email', operator: 'eq', value: record.email });
     }
   }
