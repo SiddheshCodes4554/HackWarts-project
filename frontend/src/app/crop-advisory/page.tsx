@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
 import { useUser } from "@/context/UserContext";
+import { useFarm } from "../../lib/useFarm";
 
 type CropAdvisoryResponse = {
   disease?: string;
@@ -148,9 +149,10 @@ export default function CropAdvisoryPage() {
   const { latitude, longitude, placeName } = useLocation();
   const router = useRouter();
   const { user, profile, loading: userLoading, profileStatus } = useUser();
+  const { farm } = useFarm(user?.id);
 
-  const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
-  const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
+  const effectiveLatitude = farm?.center.lat ?? (profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude);
+  const effectiveLongitude = farm?.center.lon ?? (profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude);
   const effectivePlaceName = profile?.location_name || placeName;
   
   // Protect route
@@ -297,9 +299,9 @@ export default function CropAdvisoryPage() {
         <section className="grid gap-5 lg:grid-cols-[1fr_0.95fr]">
           <form
             onSubmit={handleSubmit}
-            className="space-y-5 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8"
+            className="space-y-5 rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8"
           >
-            <div className="rounded-[1.75rem] border border-dashed border-lime-200 bg-lime-50/70 p-5 shadow-sm">
+            <div className="rounded-3xl border border-dashed border-lime-200 bg-lime-50/70 p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-lime-700 shadow-sm">
                   <ImageIcon className="h-5 w-5" />
@@ -346,7 +348,7 @@ export default function CropAdvisoryPage() {
               />
 
               {selectedImage ? (
-                <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-white bg-white shadow-sm">
+                <div className="mt-5 overflow-hidden rounded-3xl border border-white bg-white shadow-sm">
                   <Image
                     src={selectedImage.previewUrl}
                     alt="Selected crop preview"
@@ -367,7 +369,7 @@ export default function CropAdvisoryPage() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-5 flex min-h-[16rem] items-center justify-center rounded-[1.5rem] border border-dashed border-lime-200 bg-white/80 px-6 py-8 text-center text-sm text-slate-500">
+                <div className="mt-5 flex min-h-64 items-center justify-center rounded-3xl border border-dashed border-lime-200 bg-white/80 px-6 py-8 text-center text-sm text-slate-500">
                   Preview selected image will appear here.
                 </div>
               )}
@@ -379,14 +381,14 @@ export default function CropAdvisoryPage() {
                 value={manualNote}
                 onChange={(event) => setManualNote(event.target.value)}
                 placeholder="Describe the symptoms if you cannot upload a photo. Example: yellow spots on leaves, curled edges, wilting."
-                className="min-h-[160px] w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
+                className="min-h-40 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:ring-2 focus:ring-lime-100"
               />
             </div>
 
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex h-14 w-full items-center justify-center rounded-[1.5rem] bg-lime-700 px-5 text-base font-semibold text-white transition hover:bg-lime-800 disabled:cursor-not-allowed disabled:bg-lime-400"
+              className="inline-flex h-14 w-full items-center justify-center rounded-3xl bg-lime-700 px-5 text-base font-semibold text-white transition hover:bg-lime-800 disabled:cursor-not-allowed disabled:bg-lime-400"
             >
               {loading ? (
                 <>
@@ -408,7 +410,7 @@ export default function CropAdvisoryPage() {
             ) : null}
           </form>
 
-          <aside className="space-y-4 rounded-[2rem] border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
+          <aside className="space-y-4 rounded-4xl border border-lime-100 bg-white/95 p-6 shadow-sm sm:p-8">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-lime-700">Result</p>

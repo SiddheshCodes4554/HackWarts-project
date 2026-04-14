@@ -41,12 +41,14 @@ export default function OnboardingPage() {
   }, []);
 
   useEffect(() => {
-    if (userLoading) {
+    if (userLoading || profileStatus === 'loading' || profileStatus === 'unknown') {
       return;
     }
 
     if (!user) {
-      router.replace('/login');
+      if (profileStatus === 'anonymous') {
+        router.replace('/login');
+      }
       return;
     }
 

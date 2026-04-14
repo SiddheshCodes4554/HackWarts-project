@@ -39,6 +39,7 @@ import { LocationModal } from "../../../components/LocationModal";
 import { useLocation } from "../../../context/LocationContext";
 import { useUser } from "@/context/UserContext";
 import FarmInsights from "../../../components/dashboard/FarmInsights";
+import { useFarm } from "../../../lib/useFarm";
 
 type DashboardPayload = {
   weather: {
@@ -404,13 +405,14 @@ export default function HomePage() {
   const { latitude, longitude, placeName, isDetecting } = useLocation();
   const router = useRouter();
   const { user, profile, profileStatus, loading: userLoading } = useUser();
+  const { farm } = useFarm(user?.id);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [chartsReady, setChartsReady] = useState(false);
   const [runningAnalysis, setRunningAnalysis] = useState(false);
   const dashboardApiBase = useMemo(() => resolveDashboardBaseUrl(), []);
 
-  const effectiveLatitude = profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude;
-  const effectiveLongitude = profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude;
+  const effectiveLatitude = farm?.center.lat ?? (profile?.latitude && profile.latitude !== 0 ? profile.latitude : latitude);
+  const effectiveLongitude = farm?.center.lon ?? (profile?.longitude && profile.longitude !== 0 ? profile.longitude : longitude);
   const effectivePlaceName = profile?.location_name || placeName;
 
   useEffect(() => {
@@ -700,7 +702,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-6 h-72 min-h-[18rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+            <div className="mt-6 h-72 min-h-72 min-w-0 rounded-2xl bg-slate-50 p-3">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <LineChart data={data?.weather.forecast ?? []}>
@@ -726,7 +728,7 @@ export default function HomePage() {
             <h2 className="text-xl font-semibold text-slate-900">Soil Intelligence</h2>
             <p className="mt-2 text-sm text-slate-600">pH, nutrients and health score from SoilGrids for your live location.</p>
 
-            <div className="mt-4 h-52 min-h-[13rem] min-w-0">
+            <div className="mt-4 h-52 min-h-52 min-w-0">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                   <RadialBarChart
@@ -784,7 +786,7 @@ export default function HomePage() {
 
             <p className="mt-2 text-sm text-slate-600">Best mandi: <span className="font-semibold text-slate-900">{data?.market.bestMarket ?? "--"}</span></p>
 
-            <div className="mt-5 h-64 min-h-[16rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+            <div className="mt-5 h-64 min-h-64 min-w-0 rounded-2xl bg-slate-50 p-3">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <BarChart data={data?.market.markets.slice(0, 3) ?? []}>
@@ -802,7 +804,7 @@ export default function HomePage() {
               ) : null}
             </div>
 
-            <div className="mt-5 h-56 min-h-[14rem] min-w-0 rounded-2xl bg-slate-50 p-3">
+            <div className="mt-5 h-56 min-h-56 min-w-0 rounded-2xl bg-slate-50 p-3">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <AreaChart data={data?.market.trend ?? []}>

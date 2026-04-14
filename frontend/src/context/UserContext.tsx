@@ -198,19 +198,33 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       const updateData = {
+        id: user.id,
         ...data,
         updated_at: new Date().toISOString(),
       };
 
       const { error: updateError } = await supabase
         .from('profiles')
-        .update(updateData)
-        .eq('id', user.id);
+        .upsert(updateData);
 
       if (updateError) throw updateError;
 
       setProfile((prev) =>
-        prev ? { ...prev, ...updateData } : null
+        prev ? { ...prev, ...updateData } : ({
+          id: user.id,
+          name: typeof data.name === 'string' ? data.name : '',
+          location_name: typeof data.location_name === 'string' ? data.location_name : '',
+          latitude: typeof data.latitude === 'number' ? data.latitude : 0,
+          longitude: typeof data.longitude === 'number' ? data.longitude : 0,
+          land_area: typeof data.land_area === 'number' ? data.land_area : 0,
+          primary_crop: typeof data.primary_crop === 'string' ? data.primary_crop : '',
+          language: typeof data.language === 'string' ? data.language : 'English',
+          role: data.role,
+          user_type: data.user_type,
+          account_type: data.account_type,
+          created_at: prev?.created_at ?? new Date().toISOString(),
+          updated_at: updateData.updated_at,
+        } as UserProfile)
       );
     } catch (err) {
       console.error('Error updating profile:', err);
